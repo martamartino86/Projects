@@ -3,44 +3,53 @@
     open System.Windows.Forms
     open System.Drawing
 
-    type IFeature =
-        interface
-        end
+    type SensorEventArgs<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (t:'T, e:'U) =
+        inherit System.EventArgs()
+        member x.FeatureType = t
+        member x.Event = e
 
-    type eventCallback = delegate of System.EventArgs -> unit
+    // Sensor's interface //
+    type ISensor<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs =
+          abstract member SensorEvents: IEvent<SensorEventArgs<'T,'U>>
 
-    type ISensor = 
-          abstract member Subscribe: IFeature * eventCallback -> unit
-
-    type FakeFeatureTypes =
+    // Kind of feature that have to be notified from the sensor //
+    type KeyFeatureTypes =
         | KeyDown = 0
         | KeyUp = 1
-
-    type FakeFeatures (t:FakeFeatureTypes) =
-        member x.FeatureType with get() = t
-        interface IFeature
-
-    type ControlSensor () =
+    
+    type KeySensor () =
         inherit UserControl()
-        let mutable upCallbacks : eventCallback list = []
-        let mutable downCallbacks : eventCallback list = []
-
-        interface ISensor with
-            member x.Subscribe(f:IFeature, cb: eventCallback) =
-                match f with
-                | :? FakeFeatures as f ->
-                    match f.FeatureType with
-                    | FakeFeatureTypes.KeyDown -> downCallbacks <- cb::downCallbacks
-                    | FakeFeatureTypes.KeyUp -> upCallbacks <- cb::upCallbacks
-                    | _ -> failwith "F# sucks (hard)"
-                | _ -> failwith "illegal feature"
+        let sensorEvent = new Event<SensorEventArgs<KeyFeatureTypes,KeyEventArgs>>()
+        interface ISensor<KeyFeatureTypes,KeyEventArgs> with
+            member x.SensorEvents = sensorEvent.Publish
 
         override x.OnKeyDown(e) =
             printfn "SPACE DOWN"
-            for cb in downCallbacks do
-                cb.Invoke e
+            sensorEvent.Trigger(new SensorEventArgs<_,_>(KeyFeatureTypes.KeyDown, e))
 
         override x.OnKeyUp(e) =
             printfn "SPACE UP"
-            for cb in upCallbacks do
-                cb.Invoke e
+            sensorEvent.Trigger(new SensorEventArgs<_,_>(KeyFeatureTypes.KeyUp, e))
+
+    type MouseFeatureTypes =
+        | MouseDown = 0
+        | MouseUp = 1
+        | MouseMove = 2
+
+    type MouseSensor () =
+        inherit UserControl()
+        let sensorEvent = new Event<SensorEventArgs<MouseFeatureTypes,MouseEventArgs>>()
+        interface ISensor<MouseFeatureTypes,MouseEventArgs> with
+            member x.SensorEvents = sensorEvent.Publish
+
+        override x.OnMouseDown(e) =
+            printfn "MOUSE DOWN"
+            sensorEvent.Trigger(new SensorEventArgs<_,_>(MouseFeatureTypes.MouseDown, e))
+
+        override x.OnMouseUp(e) =
+            printfn "MOUSE UP"
+            sensorEvent.Trigger(new SensorEventArgs<_,_>(MouseFeatureTypes.MouseUp, e))
+
+        override x.OnMouseMove(e) =
+            printfn "MOUSE MOVE"
+            sensorEvent.Trigger(new SensorEventArgs<_,_>(MouseFeatureTypes.MouseMove, e))
