@@ -53,3 +53,9 @@
         override x.OnMouseMove(e) =
             printfn "MOUSE MOVE"
             sensorEvent.Trigger(new SensorEventArgs<_,_>(MouseFeatureTypes.MouseMove, e))
+
+
+    type TouchFeatureTypes =
+        | Start = 0
+        | Move = 1
+        | End = 2
