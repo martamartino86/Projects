@@ -9,35 +9,6 @@
     open Leap
     open System.IO
 
-    type TimeStamp = int64
-
-    type IStateCleaner<'T,'U> =
-        (* Clears the history preceding a timestamp, returns the elements that are being dropped *)
-        abstract member TruncateHistory: TimeStamp -> 'T list
-
-        (* Predicts the model state at the given timestamp, as an evolution of the currently known information *)
-        abstract member Predict: TimeStamp -> unit
-
-        (*
-         * Corrects the current state using the new information, returns:
-         * (true, x) if the model was extended with new information
-         * (false, x) if the model was simply updated with the new information
-         * x is always the model representation of the new information
-         *)
-        abstract member Correct: 'U -> bool * 'T
-
-    type MyHandCleaner() =
-        interface IStateCleaner<MyHand,Hand> with
-            member x.TruncateHistory(t) = []
-            member x.Predict(t) = ()
-            member x.Correct(f) = (true, new MyHand(f))
-
-    type MyPointableCleaner() =
-        interface IStateCleaner<MyPointable,Pointable> with
-            member x.TruncateHistory(t) = []
-            member x.Predict(t) = ()
-            member x.Correct(f) = (true, new MyPointable(f))
-
     // KEYBOARD features that have to be notified from the sensor //
     type KeyFeatureTypes =
         | KeyDown = 0
@@ -111,12 +82,6 @@
         | Tool
         | ToolZombie
     
-    let mutable lastFrame:MyFrame = new MyFrame(Frame.Invalid)
-    let activeHands = new Dictionary<FakeId, int64 (* timestamp *)>()
-    let activePointables = new Dictionary<FakeId, int64 (* timestamp *)>()
-    let leapToFakeMap = new Dictionary<LeapId, FakeId>()
-    let fakeToLeapMap = new Dictionary<FakeId, LeapId>()
-
     let delta = 0.25F
     let epsilon = 1000.0f* 1.5F
 
@@ -149,8 +114,58 @@
         | NotActiveFinger = 7
         | NotActiveTool = 8
 
+    type IStateCleaner<'T,'U> =
+        (* Clears the history preceding a timestamp, returns the elements that are being dropped *)
+        abstract member TruncateHistory: TimeStamp -> 'T list
+
+        (* Predicts the model state at the given timestamp, as an evolution of the currently known information *)
+        abstract member Predict: TimeStamp -> unit
+
+        (*
+         * Corrects the current state using the new information, returns:
+         * (true, x) if the model was extended with new information
+         * (false, x) if the model was simply updated with the new information
+         * x is always the model representation of the new information
+         *)
+        abstract member Correct: 'U -> bool * 'T
+
+    type MyHandCleaner(s:MyFrame) =
+        let state = s
+        let handTimestamps = new Dictionary<FakeId, TimeStamp>()
+        interface IStateCleaner<MyHand,Hand> with
+            member x.TruncateHistory(t) =
+                let removed =
+                    handTimestamps
+                    |> Seq.filter (fun x -> x.Value < t)
+                    |> Seq.map (fun x -> state.HandList.[x.Key])
+                    |> Seq.toList
+                for hand in removed do
+                    handTimestamps.Remove(hand.Id) |> ignore
+                    state.HandList.Remove(hand.Id) |> ignore
+                removed
+
+            member x.Predict(t) = ()
+            member x.Correct(h) =
+                let id = new System.Object()
+                let hand = new MyHand(id, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                state.HandList.Add(id, hand)
+                handTimestamps.Add(id, h.Frame.Timestamp)
+                (true, hand)
+
+    type MyPointableCleaner(s:MyFrame) =
+        let state = s
+        interface IStateCleaner<MyPointable,Pointable> with
+            member x.TruncateHistory(t) = []
+            member x.Predict(t) = ()
+            member x.Correct(p) =
+                let id = new System.Object()
+                let pointable = new MyPointable(id, p.Hand.Id, p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                state.PointableList.Add(id, pointable)
+                (true, pointable)
+
+
     // Evento contenente il frame corrente e l'ID dell'oggetto a cui si riferisce la feature.
-    type LeapEventArgs(f:MyFrame, id:int) =
+    type LeapEventArgs(f:MyFrame, id:FakeId) =
         inherit System.EventArgs()
         // Oggetto Frame corrente.
         member this.Frame = f
@@ -159,17 +174,18 @@
 
     type LeapSensor () as this =
         inherit Leap.Listener()
-        let handCleaner = new MyHandCleaner() :> IStateCleaner<_,_>
-        let pointableCleaner = new MyPointableCleaner() :> IStateCleaner<_,_>
-        let counterBase = 10000000
         let ctrl = new Controller()
-        let mutable fakeIdCounter = counterBase
+
+        let zombieWindow = 200000L
+        let state = new MyFrame()
+        let handCleaner = new MyHandCleaner(state) :> IStateCleaner<_,_>
+        let pointableCleaner = new MyPointableCleaner(state) :> IStateCleaner<_,_>
+
         let sensorEvent = new Event<SensorEventArgs<LeapFeatureTypes, LeapEventArgs>>()
+
         do
             ctrl.AddListener(this) |> ignore
-        member this.allocateNewFakeId() =
-            fakeIdCounter <- fakeIdCounter + 1
-            fakeIdCounter
+
         member this.Controller = ctrl
         interface ISensor<LeapFeatureTypes,LeapEventArgs> with
             member x.SensorEvents = sensorEvent.Publish
@@ -181,27 +197,43 @@
             let frame = c.Frame()
             let currenttimestamp = frame.Timestamp
 
-            let removedHands = handCleaner.TruncateHistory(currenttimestamp)
-            let removedPointables = pointableCleaner.TruncateHistory(currenttimestamp)
-            // TODO: notify removed
+            state.Timestamp <- currenttimestamp
+
+            let removedPointables = pointableCleaner.TruncateHistory(currenttimestamp - zombieWindow)
+            for pointable in removedPointables do
+                let e = new LeapEventArgs(state, pointable.Id)
+                let t = if pointable.IsFinger then LeapFeatureTypes.NotActiveFinger else LeapFeatureTypes.NotActiveTool
+                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+
+            let removedHands = handCleaner.TruncateHistory(currenttimestamp - zombieWindow)
+            for hand in removedHands do
+                let e = new LeapEventArgs(state, hand.Id)
+                sensorEvent.Trigger(new SensorEventArgs<_,_>(LeapFeatureTypes.NotActiveHand, e))
 
             handCleaner.Predict(currenttimestamp)
             pointableCleaner.Predict(currenttimestamp)
 
             for h in frame.Hands do
                 let isNew,hand = handCleaner.Correct(h)
-                // TODO: notify new ...
-                ()
+                let e = new LeapEventArgs(state,hand.Id)
+                let t = if isNew then LeapFeatureTypes.ActiveHand else LeapFeatureTypes.MoveHand
+                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
 
             for p in frame.Pointables do
                 let isNew,pointable = pointableCleaner.Correct(p)
-                // TODO: notify new ...
-                ()
-
+                let e = new LeapEventArgs(state,pointable.Id)
+                let t =
+                    match isNew,pointable.IsFinger with
+                    | true,true -> LeapFeatureTypes.ActiveFinger
+                    | true,false -> LeapFeatureTypes.ActiveTool
+                    | false,true -> LeapFeatureTypes.MoveFinger
+                    | false,false -> LeapFeatureTypes.MoveTool
+                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
 
 //            outfile.Write("{0}, ", currenttimestamp)
 //            outfile.Flush()
 
+(*
             lastFrame.Timestamp <- currenttimestamp
             // Rimuovo gli oggetti piu' vecchi del limite (cosi' non rischio di trovare un match con loro)
             let minAcceptableTimeStamp = currenttimestamp - 2000000L
@@ -431,7 +463,7 @@
             for k in activePointables do
                 assert fakeToLeapMap.ContainsKey(k.Key)
                 assert (not (activeHands.ContainsKey(k.Key)))
-                
+                *)
         override this.OnDisconnect(c:Controller) =
             System.Console.WriteLine "OnDisconnect"
         override this.OnExit (c:Controller) =
