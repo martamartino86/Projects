@@ -1,5 +1,5 @@
 TestResult
 *.suo
 *.dll
-*/bin
-*/obj
+*/*/bin
+*/*/obj
