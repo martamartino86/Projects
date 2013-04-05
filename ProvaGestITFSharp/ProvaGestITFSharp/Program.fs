@@ -21,9 +21,9 @@ let SearchId(list:Leap.Interface, id:int) =
         | :? ToolList as list-> (list |> Seq.exists (fun x -> x.Id = id), Some FakeDriver.Tool)
         | _ -> (false, None)
 *)
-let visibleObjects = new Dictionary<int64, LeapInfoType>()
+let visibleObjects = new Dictionary<FakeId, LeapInfoType>()
 let listFrame = new Queue<MyFrame>()
-let mutable lastFrameInQueue = new MyFrame(Frame.Invalid)
+let mutable lastFrameInQueue = new MyFrame()
 let s = new FakeDriver.LeapSensor()
 let epsilon = 20.F
 // PREDICATE: sempre true
@@ -33,7 +33,7 @@ let p = new Predicate<LeapEventArgs>(fun _ ->
 // PREDICATE: muovi un dito v/destra sull'asse x
 let moveright = new Predicate<LeapEventArgs>(fun x ->
     let id = x.Id
-    let visibleType = visibleObjects.[(int64)id]
+    let visibleType = visibleObjects.[id]
     let exists =
         if listFrame |> Seq.exists (fun f -> not (f.PointableList.ContainsKey(id))) then
             false
@@ -113,7 +113,7 @@ let net2 = seq2.ToGestureNet(s)
 // mi attacco agli eventi del sensore Leap per aggiornare la lista di oggetti che vedo, e la lista di Frame su cui fare analisi temporale.
 (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
     // prendo l'ID dell'oggetto a cui si riferisce la feature dell'evento sollevato
-    let id = (int64)e.Event.Id
+    let id = e.Event.Id
     let f = e.FeatureType
     if not (listFrame.Contains(e.Event.Frame)) then
         lastFrameInQueue <- e.Event.Frame

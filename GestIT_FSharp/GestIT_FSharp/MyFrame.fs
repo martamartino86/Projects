@@ -3,8 +3,11 @@
     open Leap
     open System.Collections.Generic
 
-    type FakeId = obj
-    type LeapId = int
+    [<AllowNullLiteralAttribute>]
+    type FakeId () =
+        class
+        end
+
     type TimeStamp = int64
 
     type MyPointable (i:FakeId, ih:FakeId, d:Vector, p:Vector, v:Vector, finger:bool, tool:bool, l:float32, w:float32) =
@@ -12,17 +15,17 @@
         let mutable position = new Vector(p)
         let mutable velocity = new Vector(v)
         let id = i
-        let idHand = ih
+        let mutable idHand = ih
         let isFinger = finger
         let isTool = tool
         let length = l
         let width = w
         //new(p:Pointable) = MyPointable(p.Id, p.Hand.Id, p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
-        member this.Direction = direction
-        member this.Position with get() = position and set(p) = position <- p
-        member this.Velocity = velocity
+        member this.Direction with get() = direction and set(d) = direction <- new Vector(d)
+        member this.Position with get() = position and set(p) = position <- new Vector(p)
+        member this.Velocity with get() = velocity and set(v) = velocity <- new Vector(v)
         member this.Id with get() = id
-        member this.IdHand with get() = idHand
+        member this.IdHand with get() = idHand and set(v) = idHand <- v
         member this.Length = length
         member this.Width = width
         member this.IsFinger = isFinger

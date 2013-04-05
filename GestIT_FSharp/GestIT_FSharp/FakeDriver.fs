@@ -67,7 +67,7 @@
  
     
     let outfile = File.CreateText("dataleap.txt")
-  
+
     // devo tenermi traccia di cosa ho visto nel frame (precedente): tengo dunque un dizionario in cui la Key e' l'ID
     // (NB: ID e' un campo unico per ogni frame) e il valore è il Frame stesso.
     // In tal modo, quando ricevo un nuovo frame, controllo che gli ID:
@@ -81,24 +81,29 @@
         | FingerZombie
         | Tool
         | ToolZombie
-    
+
     let delta = 0.25F
     let epsilon = 1000.0f* 1.5F
 
-    let checkDistanceHands (h1:MyHand) (h2:MyHand) =
+    let handDistance (h1:MyHand) (h2:Hand) =
 //        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
 //        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
-        (h1.Position - h2.Position).Magnitude < 100.F
+        (h1.Position - h2.PalmPosition).Magnitude
 
-    let checkDistanceFingers (p1:MyPointable) (p2:MyPointable) =
-        printfn "distanza: %s " (((p1.Position - p2.Position).Magnitude).ToString())
+    let checkDistanceHands (h1:MyHand) (h2:Hand) =
+//        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
+//        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
+        (handDistance h1 h2) < 100.F
+
+    let checkDistanceFingers (p1:MyPointable) (p2:Pointable) =
+        printfn "distanza: %s " (((p1.Position - p2.TipPosition).Magnitude).ToString())
         //printfn "%A %A" p1.Position (p2.Position)
-        (p1.Position - p2.Position).Magnitude < 50.F
+        (p1.Position - p2.TipPosition).Magnitude < 50.F
     
-    let isTheSameHand (h1:MyHand) (h2:MyHand) =
+    let isTheSameHand (h1:MyHand) (h2:Hand) =
         checkDistanceHands h1 h2
 
-    let isTheSameFinger (f1:MyPointable) (f2:MyPointable) =
+    let isTheSameFinger (f1:MyPointable) (f2:Pointable) =
         //printfn "diff length: %f " (System.Math.Abs(f1.Length - f2.Length))
         //printfn "diff width: %f " (System.Math.Abs(f1.Width - f2.Width))
         (System.Math.Abs(f1.Length - f2.Length) < epsilon) && (System.Math.Abs(f1.Width - f2.Width) < epsilon) && (checkDistanceFingers f1 f2)
@@ -122,47 +127,179 @@
         abstract member Predict: TimeStamp -> unit
 
         (*
-         * Corrects the current state using the new information, returns:
-         * (true, x) if the model was extended with new information
-         * (false, x) if the model was simply updated with the new information
-         * x is always the model representation of the new information
+         * Updates the current state using the new information (assuming matching ids);
+         * returns the model representation of the new information if the update succeeded
          *)
-        abstract member Correct: 'U -> bool * 'T
+        abstract member TryUpdate: 'U -> 'T option
+
+        (*
+         * Tries to corrects the current state using the new information;
+         * returns the model representation of the new information if the correction succeeded
+         *)
+        abstract member Correct: 'U -> 'T option
+
+        (*
+         * Extends the current state using the new information;
+         * returns the model representation of the new information
+         *)
+        abstract member Extend: 'U -> 'T
+
+    type LeapId = int
 
     type MyHandCleaner(s:MyFrame) =
         let state = s
-        let handTimestamps = new Dictionary<FakeId, TimeStamp>()
+        let handTimestamps = new Dictionary<LeapId, TimeStamp>()
+        let leapToFake = new Dictionary<LeapId, FakeId>()
+        let mutable lastTimestamp:TimeStamp = -1L
+        
+        member x.GetFakeId(leapId:LeapId) =
+            if leapId = Leap.Hand.Invalid.Id then
+                null
+            else
+                leapToFake.[leapId]
+
         interface IStateCleaner<MyHand,Hand> with
             member x.TruncateHistory(t) =
-                let removed =
+                let removedIds =
                     handTimestamps
                     |> Seq.filter (fun x -> x.Value < t)
-                    |> Seq.map (fun x -> state.HandList.[x.Key])
+                    |> Seq.map (fun x -> x.Key)
+                    |> Seq.toArray
+                let removedHands =
+                    removedIds
+                    |> Seq.map (fun x -> state.HandList.[leapToFake.[x]])
                     |> Seq.toList
-                for hand in removed do
-                    handTimestamps.Remove(hand.Id) |> ignore
-                    state.HandList.Remove(hand.Id) |> ignore
-                removed
+                for leapId in removedIds do
+                    let fakeId = leapToFake.[leapId]
+                    for p in state.PointableList.Values do
+                        if p.IdHand = fakeId then
+                            p.IdHand <- null
+                    handTimestamps.Remove(leapId) |> ignore
+                    state.HandList.Remove(fakeId) |> ignore
+                    leapToFake.Remove(leapId) |> ignore
+                removedHands
 
-            member x.Predict(t) = ()
+            member x.Predict(t) =
+                for h in state.HandList do
+                    let hand = h.Value
+                    hand.Position <- hand.Position (* mm *) + hand.Velocity (* mm/s *) * ((float32)(t (* us *) - lastTimestamp) * (1.e-6f))
+                lastTimestamp <- t
+
+            member x.TryUpdate(h) =
+                let leapId = h.Id
+                if leapToFake.ContainsKey(leapId) then
+                    let fakeId = leapToFake.[leapId]
+                    let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                    state.HandList.[fakeId] <- hand
+                    handTimestamps.[leapId] <- h.Frame.Timestamp
+                    Some hand
+                else
+                    None
+
             member x.Correct(h) =
-                let id = new System.Object()
-                let hand = new MyHand(id, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
-                state.HandList.Add(id, hand)
-                handTimestamps.Add(id, h.Frame.Timestamp)
-                (true, hand)
+                (* controllo se questa mano e' gia' contenuta nello stato *)
+                let leapId = h.Id
+                try
+                    let oldLeapId,hand =
+                        handTimestamps
+                        |> Seq.filter ( fun x -> x.Value < h.Frame.Timestamp )
+                        |> Seq.map ( fun x -> x.Key,state.HandList.[leapToFake.[x.Key]] )
+                        |> Seq.filter ( fun (oldLeapId,x) -> isTheSameHand x h )
+                        |> Seq.sortBy ( fun (oldLeapId,x) -> handDistance x h )
+                        |> Seq.head
+                    let fakeId = hand.Id
+                    let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                    handTimestamps.Remove(oldLeapId) |> ignore
+                    leapToFake.Remove(oldLeapId) |> ignore
+                    state.HandList.[fakeId] <- hand
+                    handTimestamps.Add(leapId, h.Frame.Timestamp)
+                    leapToFake.Add(leapId, fakeId)
+                    Some hand
+                with
+                | _ -> 
+                    None
 
-    type MyPointableCleaner(s:MyFrame) =
+            member x.Extend(h) = 
+                let leapId = h.Id
+                let fakeId = new FakeId()
+                let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                state.HandList.Add(fakeId, hand)
+                handTimestamps.Add(leapId, h.Frame.Timestamp)
+                leapToFake.Add(leapId, fakeId)
+                hand
+
+    type MyPointableCleaner(s:MyFrame,hc:MyHandCleaner) =
         let state = s
-        interface IStateCleaner<MyPointable,Pointable> with
-            member x.TruncateHistory(t) = []
-            member x.Predict(t) = ()
-            member x.Correct(p) =
-                let id = new System.Object()
-                let pointable = new MyPointable(id, p.Hand.Id, p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
-                state.PointableList.Add(id, pointable)
-                (true, pointable)
+        let handCleaner = hc
+        let pointableTimestamps = new Dictionary<LeapId, TimeStamp>()
+        let leapToFake = new Dictionary<LeapId, FakeId>()
+        let mutable lastTimestamp:TimeStamp = -1L
 
+        interface IStateCleaner<MyPointable,Pointable> with
+            member x.TruncateHistory(t) =
+                let removedIds =
+                    pointableTimestamps
+                    |> Seq.filter (fun x -> x.Value < t)
+                    |> Seq.map (fun x -> x.Key)
+                    |> Seq.toArray
+                let removedPointables =
+                    removedIds
+                    |> Seq.map (fun x -> state.PointableList.[leapToFake.[x]])
+                    |> Seq.toList
+                for leapId in removedIds do
+                    pointableTimestamps.Remove(leapId) |> ignore
+                    state.PointableList.Remove(leapToFake.[leapId]) |> ignore
+                    leapToFake.Remove(leapId) |> ignore
+                removedPointables
+            
+            member x.TryUpdate(p) =
+                let leapId = p.Id
+                if leapToFake.ContainsKey(leapId) then
+                    let fakeId = leapToFake.[leapId]
+                    let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                    state.PointableList.[fakeId] <- pointable
+                    pointableTimestamps.[leapId] <- p.Frame.Timestamp
+                    Some pointable
+                else
+                    None
+
+            member x.Predict(t) =
+                for p in state.PointableList do
+                    let ptb = p.Value
+                    ptb.Position <- ptb.Position + ptb.Velocity * ((float32)(t - lastTimestamp) * (1.e-6f))
+                lastTimestamp <- t
+
+            member x.Correct(p) =
+                (* controllo se questo pointable e' gia' contenuto nello stato *)
+                let leapId = p.Id
+                try
+                    let oldLeapId,pointable =
+                        pointableTimestamps
+                        |> Seq.filter ( fun x -> x.Value < p.Frame.Timestamp )
+                        |> Seq.map ( fun x -> x.Key,state.PointableList.[leapToFake.[x.Key]] )
+                        |> Seq.filter ( fun (oldLeapId,x) -> isTheSameFinger x p )
+                        |> Seq.sortBy ( fun (oldLeapId,x) -> checkDistanceFingers x p )
+                        |> Seq.head
+                    let fakeId = pointable.Id
+                    let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                    pointableTimestamps.Remove(oldLeapId) |> ignore
+                    leapToFake.Remove(oldLeapId) |> ignore
+                    state.PointableList.[fakeId] <- pointable
+                    pointableTimestamps.Add(leapId, p.Frame.Timestamp)
+                    leapToFake.Add(leapId, fakeId)
+                    Some pointable
+                with
+                | _ -> 
+                    None
+
+            member x.Extend(p) =
+                let leapId = p.Id
+                let fakeId = new FakeId()
+                let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                state.PointableList.Add(fakeId, pointable)
+                pointableTimestamps.Add(leapId, p.Frame.Timestamp)
+                leapToFake.Add(leapId, fakeId)
+                pointable
 
     // Evento contenente il frame corrente e l'ID dell'oggetto a cui si riferisce la feature.
     type LeapEventArgs(f:MyFrame, id:FakeId) =
@@ -178,8 +315,9 @@
 
         let zombieWindow = 200000L
         let state = new MyFrame()
-        let handCleaner = new MyHandCleaner(state) :> IStateCleaner<_,_>
-        let pointableCleaner = new MyPointableCleaner(state) :> IStateCleaner<_,_>
+        let handCleaner = new MyHandCleaner(state)
+        let pointableCleaner = new MyPointableCleaner(state, handCleaner) :> IStateCleaner<_,_>
+        let handCleaner = handCleaner :> IStateCleaner<_,_>
 
         let sensorEvent = new Event<SensorEventArgs<LeapFeatureTypes, LeapEventArgs>>()
 
@@ -213,22 +351,44 @@
             handCleaner.Predict(currenttimestamp)
             pointableCleaner.Predict(currenttimestamp)
 
+            let mutable unmatched = []
             for h in frame.Hands do
-                let isNew,hand = handCleaner.Correct(h)
+                match handCleaner.TryUpdate(h) with
+                | Some hand ->
+                    let e = new LeapEventArgs(state,hand.Id)
+                    sensorEvent.Trigger(new SensorEventArgs<_,_>(LeapFeatureTypes.MoveHand, e))
+                | None -> unmatched <- h::unmatched
+
+            for h in unmatched do
+                let hand,t =
+                    match handCleaner.Correct(h) with
+                    | Some hand -> hand,LeapFeatureTypes.MoveHand
+                    | None -> handCleaner.Extend(h),LeapFeatureTypes.ActiveHand
                 let e = new LeapEventArgs(state,hand.Id)
-                let t = if isNew then LeapFeatureTypes.ActiveHand else LeapFeatureTypes.MoveHand
                 sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
 
+            let mutable unmatched = []
             for p in frame.Pointables do
-                let isNew,pointable = pointableCleaner.Correct(p)
+                match pointableCleaner.TryUpdate(p) with
+                | Some pointable ->
+                    let t = if pointable.IsFinger then LeapFeatureTypes.MoveFinger else LeapFeatureTypes.MoveTool
+                    let e = new LeapEventArgs(state,pointable.Id)
+                    sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+                | None -> unmatched <- p::unmatched
+
+            for p in unmatched do
+                let pointable,t =
+                    match pointableCleaner.Correct(p) with
+                    | Some pointable ->
+                        let t = if pointable.IsFinger then LeapFeatureTypes.MoveFinger else LeapFeatureTypes.MoveTool
+                        pointable,t
+                    | None ->
+                        let pointable = pointableCleaner.Extend(p)
+                        let t = if pointable.IsFinger then LeapFeatureTypes.ActiveFinger else LeapFeatureTypes.ActiveTool
+                        pointable,t
                 let e = new LeapEventArgs(state,pointable.Id)
-                let t =
-                    match isNew,pointable.IsFinger with
-                    | true,true -> LeapFeatureTypes.ActiveFinger
-                    | true,false -> LeapFeatureTypes.ActiveTool
-                    | false,true -> LeapFeatureTypes.MoveFinger
-                    | false,false -> LeapFeatureTypes.MoveTool
                 sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+
 
 //            outfile.Write("{0}, ", currenttimestamp)
 //            outfile.Flush()
