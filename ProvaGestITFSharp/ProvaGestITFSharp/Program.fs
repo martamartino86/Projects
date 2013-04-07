@@ -3,7 +3,7 @@
 module Program
 open FakeDriver
 open GestIT
-open MyFrame
+open MyLeapFrame
 open Leap
 open System.Windows.Forms
 open System.Drawing

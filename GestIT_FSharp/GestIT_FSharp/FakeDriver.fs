@@ -1,10 +1,10 @@
-﻿module FakeDriver
+﻿namespace FakeDriver
 
     open System.Windows.Forms
     open System.Drawing
     open System.Collections.Generic
     open Microsoft.FSharp.Reflection
-    open MyFrame
+    open MyLeapFrame
     open GestIT
     open Leap
     open System.IO
@@ -18,7 +18,8 @@
         inherit UserControl()
         let sensorEvent = new Event<SensorEventArgs<KeyFeatureTypes,KeyEventArgs>>()
         interface ISensor<KeyFeatureTypes,KeyEventArgs> with
-            member x. SensorEvents = sensorEvent.Publish
+            [<CLIEvent>]
+            member x.SensorEvents = sensorEvent.Publish
 
         override x.OnKeyDown(e) =
             printfn "SPACE DOWN"
@@ -39,6 +40,7 @@
         let mutable down = false
         let sensorEvent = new Event<SensorEventArgs<MouseFeatureTypes,MouseEventArgs>>()
         interface GestIT.ISensor<MouseFeatureTypes,MouseEventArgs> with
+            [<CLIEvent>]
             member x.SensorEvents = sensorEvent.Publish
 
         override x.OnMouseDown(e) =
@@ -66,7 +68,7 @@
 // *** LEAP *** //
  
     
-    let outfile = File.CreateText("dataleap.txt")
+    //let outfile = File.CreateText("dataleap.txt")
 
     // devo tenermi traccia di cosa ho visto nel frame (precedente): tengo dunque un dizionario in cui la Key e' l'ID
     // (NB: ID e' un campo unico per ogni frame) e il valore è il Frame stesso.
@@ -81,32 +83,6 @@
         | FingerZombie
         | Tool
         | ToolZombie
-
-    let delta = 0.25F
-    let epsilon = 1000.0f* 1.5F
-
-    let handDistance (h1:MyHand) (h2:Hand) =
-//        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
-//        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
-        (h1.Position - h2.PalmPosition).Magnitude
-
-    let checkDistanceHands (h1:MyHand) (h2:Hand) =
-//        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
-//        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
-        (handDistance h1 h2) < 100.F
-
-    let checkDistanceFingers (p1:MyPointable) (p2:Pointable) =
-        printfn "distanza: %s " (((p1.Position - p2.TipPosition).Magnitude).ToString())
-        //printfn "%A %A" p1.Position (p2.Position)
-        (p1.Position - p2.TipPosition).Magnitude < 50.F
-    
-    let isTheSameHand (h1:MyHand) (h2:Hand) =
-        checkDistanceHands h1 h2
-
-    let isTheSameFinger (f1:MyPointable) (f2:Pointable) =
-        //printfn "diff length: %f " (System.Math.Abs(f1.Length - f2.Length))
-        //printfn "diff width: %f " (System.Math.Abs(f1.Width - f2.Width))
-        (System.Math.Abs(f1.Length - f2.Length) < epsilon) && (System.Math.Abs(f1.Width - f2.Width) < epsilon) && (checkDistanceFingers f1 f2)
 
     type LeapFeatureTypes =
         | ActiveHand = 0
@@ -147,6 +123,20 @@
     type LeapId = int
 
     type MyHandCleaner(s:MyFrame) =
+
+        let handDistance (h1:MyHand) (h2:Hand) =
+//        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
+//        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
+            (h1.Position - h2.PalmPosition).Magnitude
+
+        let checkDistanceHands (h1:MyHand) (h2:Hand) =
+    //        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
+    //        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
+            (handDistance h1 h2) < 100.F
+
+        let isTheSameHand (h1:MyHand) (h2:Hand) =
+            checkDistanceHands h1 h2
+
         let state = s
         let handTimestamps = new Dictionary<LeapId, TimeStamp>()
         let leapToFake = new Dictionary<LeapId, FakeId>()
@@ -229,6 +219,19 @@
                 hand
 
     type MyPointableCleaner(s:MyFrame,hc:MyHandCleaner) =
+        let epsilon = 1000.0f* 1.5F
+
+        let checkDistanceFingers (p1:MyPointable) (p2:Pointable) =
+            printfn "distanza: %s " (((p1.Position - p2.TipPosition).Magnitude).ToString())
+            //printfn "%A %A" p1.Position (p2.Position)
+            (p1.Position - p2.TipPosition).Magnitude < 50.F
+    
+        let isTheSameFinger (f1:MyPointable) (f2:Pointable) =
+            //printfn "diff length: %f " (System.Math.Abs(f1.Length - f2.Length))
+            //printfn "diff width: %f " (System.Math.Abs(f1.Width - f2.Width))
+            (System.Math.Abs(f1.Length - f2.Length) < epsilon) && (System.Math.Abs(f1.Width - f2.Width) < epsilon) && (checkDistanceFingers f1 f2)
+
+
         let state = s
         let handCleaner = hc
         let pointableTimestamps = new Dictionary<LeapId, TimeStamp>()
@@ -250,6 +253,7 @@
                     pointableTimestamps.Remove(leapId) |> ignore
                     state.PointableList.Remove(leapToFake.[leapId]) |> ignore
                     leapToFake.Remove(leapId) |> ignore
+                    printfn "RIMOSSO: %A" leapId
                 removedPointables
             
             member x.TryUpdate(p) =
@@ -287,6 +291,7 @@
                     state.PointableList.[fakeId] <- pointable
                     pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                     leapToFake.Add(leapId, fakeId)
+                    printfn "NUOVO ID %A, TROVATO ZOMBIE: %A" leapId oldLeapId
                     Some pointable
                 with
                 | _ -> 
@@ -299,6 +304,7 @@
                 state.PointableList.Add(fakeId, pointable)
                 pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
+                printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
                 pointable
 
     // Evento contenente il frame corrente e l'ID dell'oggetto a cui si riferisce la feature.
@@ -326,6 +332,7 @@
 
         member this.Controller = ctrl
         interface ISensor<LeapFeatureTypes,LeapEventArgs> with
+            [<CLIEvent>]
             member x.SensorEvents = sensorEvent.Publish
         override this.OnInit(c:Controller) =
             System.Console.WriteLine "OnInit"

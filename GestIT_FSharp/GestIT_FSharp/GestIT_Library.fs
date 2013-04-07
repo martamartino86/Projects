@@ -1,4 +1,4 @@
-﻿module GestIT
+﻿namespace GestIT
 
 open System.Runtime.InteropServices
 
@@ -8,6 +8,7 @@ type SensorEventArgs<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (t
   member x.Event = e
 
 type ISensor<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs =
+  [<CLIEvent>]
   abstract member SensorEvents: IEvent<SensorEventArgs<'T,'U>>
 
 

@@ -1,4 +1,4 @@
-﻿module MyFrame
+﻿namespace MyLeapFrame
 
     open Leap
     open System.Collections.Generic
@@ -20,7 +20,6 @@
         let isTool = tool
         let length = l
         let width = w
-        //new(p:Pointable) = MyPointable(p.Id, p.Hand.Id, p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
         member this.Direction with get() = direction and set(d) = direction <- new Vector(d)
         member this.Position with get() = position and set(p) = position <- new Vector(p)
         member this.Velocity with get() = velocity and set(v) = velocity <- new Vector(v)
@@ -30,6 +29,8 @@
         member this.Width = width
         member this.IsFinger = isFinger
         member this.IsTool = isTool
+        member this.Clone () =
+            new MyPointable(this.Id, this.IdHand, this.Direction, this.Position, this.Velocity, this.IsFinger, this.IsTool, this.Length, this.Width)
         //member this.Rename (newi,newih) = new MyPointable(newi,newih,direction,position,velocity,isFinger,isTool,length,width)
         
     type MyHand (i:FakeId, d:Vector, p:Vector, v:Vector, n:Vector, c:Vector, r:float32) =
@@ -40,7 +41,6 @@
         let sphereCenter = new Vector(c)
         let sphereRadius = r
         let id = i
-        //new(h:Hand) = MyHand(h.Id, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
         member this.Direction = direction
         member this.Position with get() = position and set(p) = position <- p
         member this.Velocity = velocity
@@ -48,6 +48,8 @@
         member this.Id with get() = id
         member this.SphereCenter = sphereCenter
         member this.SphereRadius = sphereRadius
+        member this.Clone () =
+            new MyHand(this.Id, this.Direction, this.Position, this.Velocity, this.Normal, this.SphereCenter, this.SphereRadius)
         //member this.Rename (newi) = new MyHand(newi,direction,position,velocity,normal,sphereCenter,sphereRadius)
 
     type MyFrame () =
@@ -71,6 +73,15 @@
         member this.HandList = handList
         member this.Timestamp with get() = timestamp and set(t) = timestamp <- t
         member this.IsValid = timestamp >= 0L
+        member this.Clone () =
+            let f = new MyFrame()
+            f.Timestamp <- this.Timestamp
+            for h in this.HandList do
+                f.HandList.Add(h.Key, h.Value.Clone())
+            for p in this.PointableList do
+                f.PointableList.Add(p.Key, p.Value.Clone())
+            f
+
         (*
             if idFrame <> (int64)(-1) then true
             else false
