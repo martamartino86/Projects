@@ -129,13 +129,9 @@
 //        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
             (h1.Position - h2.PalmPosition).Magnitude
 
-        let checkDistanceHands (h1:MyHand) (h2:Hand) =
-    //        let delta_s = System.Math.Abs (h1.Position - h2.Position).Magnitude
-    //        let delta_t = (float32)(currenttimestamp - activeHands.[leapToFakeMap.[h1.Id]]) / 1000.F
-            (handDistance h1 h2) < 100.F
-
-        let isTheSameHand (h1:MyHand) (h2:Hand) =
-            checkDistanceHands h1 h2
+        let isTheSameHand (zombiets:TimeStamp) (zombiehand:MyHand) (newhand:Hand) =
+            let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
+            (handDistance zombiehand newhand) < float32(newhand.Frame.Timestamp - zombiets) * speedError + 3.F
 
         let state = s
         let handTimestamps = new Dictionary<LeapId, TimeStamp>()
@@ -167,6 +163,7 @@
                     handTimestamps.Remove(leapId) |> ignore
                     state.HandList.Remove(fakeId) |> ignore
                     leapToFake.Remove(leapId) |> ignore
+                    printfn "RIMOSSO: %A" leapId
                 removedHands
 
             member x.Predict(t) =
@@ -189,14 +186,15 @@
             member x.Correct(h) =
                 (* controllo se questa mano e' gia' contenuta nello stato *)
                 let leapId = h.Id
-                try
-                    let oldLeapId,hand =
-                        handTimestamps
-                        |> Seq.filter ( fun x -> x.Value < h.Frame.Timestamp )
-                        |> Seq.map ( fun x -> x.Key,state.HandList.[leapToFake.[x.Key]] )
-                        |> Seq.filter ( fun (oldLeapId,x) -> isTheSameHand x h )
-                        |> Seq.sortBy ( fun (oldLeapId,x) -> handDistance x h )
-                        |> Seq.head
+                let maybeZombie =
+                    handTimestamps
+                    |> Seq.filter ( fun x -> x.Value < h.Frame.Timestamp )
+                    |> Seq.map ( fun x -> x.Key,state.HandList.[leapToFake.[x.Key]] )
+                    |> Seq.sortBy ( fun (oldLeapId,x) -> handDistance x h )
+                    |> Seq.tryFind ( fun (oldLeapId,x) -> isTheSameHand handTimestamps.[oldLeapId] x h )
+                match maybeZombie with
+                | None -> None
+                | Some (oldLeapId, hand) ->
                     let fakeId = hand.Id
                     let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
                     handTimestamps.Remove(oldLeapId) |> ignore
@@ -204,10 +202,8 @@
                     state.HandList.[fakeId] <- hand
                     handTimestamps.Add(leapId, h.Frame.Timestamp)
                     leapToFake.Add(leapId, fakeId)
+                    printfn "NUOVO ID %A, TROVATO ZOMBIE: %A" leapId oldLeapId
                     Some hand
-                with
-                | _ -> 
-                    None
 
             member x.Extend(h) = 
                 let leapId = h.Id
@@ -216,6 +212,7 @@
                 state.HandList.Add(fakeId, hand)
                 handTimestamps.Add(leapId, h.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
+                printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
                 hand
 
     type MyPointableCleaner(s:MyFrame,hc:MyHandCleaner) =
@@ -253,7 +250,7 @@
                     pointableTimestamps.Remove(leapId) |> ignore
                     state.PointableList.Remove(leapToFake.[leapId]) |> ignore
                     leapToFake.Remove(leapId) |> ignore
-                    printfn "RIMOSSO: %A" leapId
+//                    printfn "RIMOSSO: %A" leapId
                 removedPointables
             
             member x.TryUpdate(p) =
@@ -276,14 +273,15 @@
             member x.Correct(p) =
                 (* controllo se questo pointable e' gia' contenuto nello stato *)
                 let leapId = p.Id
-                try
-                    let oldLeapId,pointable =
-                        pointableTimestamps
-                        |> Seq.filter ( fun x -> x.Value < p.Frame.Timestamp )
-                        |> Seq.map ( fun x -> x.Key,state.PointableList.[leapToFake.[x.Key]] )
-                        |> Seq.filter ( fun (oldLeapId,x) -> isTheSameFinger x p )
-                        |> Seq.sortBy ( fun (oldLeapId,x) -> checkDistanceFingers x p )
-                        |> Seq.head
+                let maybeZombie =
+                    pointableTimestamps
+                    |> Seq.filter ( fun x -> x.Value < p.Frame.Timestamp )
+                    |> Seq.map ( fun x -> x.Key,state.PointableList.[leapToFake.[x.Key]] )
+                    |> Seq.sortBy ( fun (oldLeapId,x) -> checkDistanceFingers x p )
+                    |> Seq.tryFind ( fun (oldLeapId,x) -> isTheSameFinger x p )
+                match maybeZombie with
+                | None -> None
+                | Some (oldLeapId,pointable) ->
                     let fakeId = pointable.Id
                     let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
                     pointableTimestamps.Remove(oldLeapId) |> ignore
@@ -291,11 +289,8 @@
                     state.PointableList.[fakeId] <- pointable
                     pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                     leapToFake.Add(leapId, fakeId)
-                    printfn "NUOVO ID %A, TROVATO ZOMBIE: %A" leapId oldLeapId
+//                    printfn "NUOVO ID %A, TROVATO ZOMBIE: %A" leapId oldLeapId
                     Some pointable
-                with
-                | _ -> 
-                    None
 
             member x.Extend(p) =
                 let leapId = p.Id
@@ -304,7 +299,7 @@
                 state.PointableList.Add(fakeId, pointable)
                 pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
-                printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
+//                printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
                 pointable
 
     // Evento contenente il frame corrente e l'ID dell'oggetto a cui si riferisce la feature.
