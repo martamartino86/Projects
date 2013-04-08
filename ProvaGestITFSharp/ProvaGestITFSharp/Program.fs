@@ -10,21 +10,13 @@ open System.Drawing
 open System.Numerics
 open System.Collections.Generic
 
-
-let speed (x:float32) (y:float32) = x/y
-
-(* cerca un id all'interno della lista, che puo' essere una HandList, FingerList o ToolList.
-let SearchId(list:Leap.Interface, id:int) =
-    match list with
-        | :? HandList as list -> (list |> Seq.exists (fun x -> x.Id = id), Some FakeDriver.Hand)
-        | :? FingerList as list -> (list |> Seq.exists (fun x -> x.Id = id), Some FakeDriver.Finger)
-        | :? ToolList as list-> (list |> Seq.exists (fun x -> x.Id = id), Some FakeDriver.Tool)
-        | _ -> (false, None)
-*)
+(* coppia ID - stato {active, move, notactive, zombie} *)
 let visibleObjects = new Dictionary<FakeId, LeapInfoType>()
+(* lista di frame dell'ultimo 1/2 sec *)
 let listFrame = new Queue<MyFrame>()
 let mutable lastFrameInQueue = new MyFrame()
 let s = new FakeDriver.LeapSensor()
+let speed (x:float32) (y:float32) = x/y
 let epsilon = 20.F
 // PREDICATE: sempre true
 let p = new Predicate<LeapEventArgs>(fun _ ->
@@ -62,7 +54,6 @@ let moveon = new Predicate<LeapEventArgs>(fun x ->
             let delta_s = System.Math.Abs(p2.x - p1.x)
             let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
             let v_m = (delta_s / delta_t) * 1000000.f
-            //printfn "%s " (((p2.z <= p1.z) && (System.Math.Abs(p2.y - p1.y) < 40.f) && (System.Math.Abs(p2.x - p1.x) < 40.f) && (v_m >= 0.3f)).ToString())
             printfn "p2.z <= p1.z: %s" ((p2.z <= p1.z).ToString())
             printfn "System.Math.Abs(p2.y - p1.y) < 40.f: %s" ((System.Math.Abs(p2.y - p1.y) < 40.f).ToString())
             printfn "System.Math.Abs(p2.x - p1.x) < 40.f: %s" ((System.Math.Abs(p2.x - p1.x) < 40.f).ToString())
@@ -83,7 +74,6 @@ let moveback = new Predicate<LeapEventArgs>(fun x ->
             let delta_s = System.Math.Abs(p2.x - p1.x)
             let delta_t = (float32)(f2.Timestamp - f1.Timestamp) / 1000.f // così passo da microsecondi a millisecondi
             let v_m = speed delta_s delta_t
-            //let diff_y = System.Math.Abs(p2.y - p1.y)
             (p2.z > p1.z) && (System.Math.Abs(p2.y - p1.y) < 40.f) && (System.Math.Abs(p2.x - p1.x) < 40.f) && (v_m >= 0.3f)
         )
     exists
