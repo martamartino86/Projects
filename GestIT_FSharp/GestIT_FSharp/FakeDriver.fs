@@ -76,15 +76,6 @@
     // * non siano presenti -> mando Active
     // * siano già presenti -> mando Move
     // * non siano più presenti -> mando NotActive
-    (*
-    type LeapInfoType =
-        | Hand
-        | HandZombie
-        | Finger
-        | FingerZombie
-        | Tool
-        | ToolZombie
-    *)
 
     (* Information sent on event triggering *)
     type LeapFeatureTypes =
@@ -126,6 +117,7 @@
     type LeapId = int
 
     type MyHandCleaner(s:MyFrame) =
+        let debugHand = false
 
         let handDistance (h1:MyHand) (h2:Hand) =
             (h1.Position - h2.PalmPosition).Magnitude
@@ -164,7 +156,7 @@
                     handTimestamps.Remove(leapId) |> ignore
                     state.HandList.Remove(fakeId) |> ignore
                     leapToFake.Remove(leapId) |> ignore
-//                    printfn "RIMOSSO: %A" leapId
+                    if debugHand then printfn "RIMOSSO: %A" leapId
                 removedHands
 
             member x.Predict(t) =
@@ -203,7 +195,7 @@
                     state.HandList.[fakeId] <- hand
                     handTimestamps.Add(leapId, h.Frame.Timestamp)
                     leapToFake.Add(leapId, fakeId)
-//                    printfn "NUOVO ID %A, TROVATO ZOMBIE: %A" leapId oldLeapId
+                    if debugHand then printfn "NUOVO ID %A, TROVATO ZOMBIE: %A" leapId oldLeapId
                     Some hand
 
             member x.Extend(h) = 
@@ -213,12 +205,12 @@
                 state.HandList.Add(fakeId, hand)
                 handTimestamps.Add(leapId, h.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
-//                printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
+                if debugHand then printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
                 hand
 
     type MyPointableCleaner(s:MyFrame,hc:MyHandCleaner) =
         let epsilon = 1000.0f * 1.5F
-
+        let debugPtbl = false
         let fingerDistance (p1:MyPointable) (p2:Pointable) =
             (p1.Position - p2.TipPosition).Magnitude
     
@@ -226,7 +218,7 @@
             let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
             let diffLength = System.Math.Abs(zombiePointable.Length - newPointable.Length) // finger length
             let diffWidth = System.Math.Abs(zombiePointable.Width - newPointable.Width) // finger width
-//            printfn "--->> %A %A %A" diffLength diffWidth ((fingerDistance zombiePointable newPointable) < (float32(newPointable.Frame.Timestamp - zombiets) * speedError + 3.F))
+            if debugPtbl then printfn "--->> %A %A %A" diffLength diffWidth ((fingerDistance zombiePointable newPointable) < (float32(newPointable.Frame.Timestamp - zombiets) * speedError + 3.F))
             (diffLength < epsilon) && (diffWidth < epsilon) &&
                 ((fingerDistance zombiePointable newPointable) < (float32(newPointable.Frame.Timestamp - zombiets) * speedError + 3.F))
 
@@ -251,7 +243,7 @@
                     pointableTimestamps.Remove(leapId) |> ignore
                     state.PointableList.Remove(leapToFake.[leapId]) |> ignore
                     leapToFake.Remove(leapId) |> ignore
-                    printfn "%A RIMUOVO: %A => %A" state.Timestamp leapId (leapToFake.Keys |> Seq.toArray)
+                    if debugPtbl then printfn "%A RIMUOVO: %A => %A" state.Timestamp leapId (leapToFake.Keys |> Seq.toArray)
                 removedPointables
             
             member x.TryUpdate(p) =
@@ -290,7 +282,7 @@
                     state.PointableList.[fakeId] <- pointable
                     pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                     leapToFake.Add(leapId, fakeId)
-                    printfn "%A RINOMINO %A -> %A => %A" state.Timestamp oldLeapId leapId (leapToFake.Keys |> Seq.toArray)
+                    if debugPtbl then printfn "%A RINOMINO %A -> %A => %A" state.Timestamp oldLeapId leapId (leapToFake.Keys |> Seq.toArray)
                     Some pointable
 
             member x.Extend(p) =
@@ -300,7 +292,7 @@
                 state.PointableList.Add(fakeId, pointable)
                 pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
-                printfn "%A NUOVO ID: %A => %A" state.Timestamp leapId (leapToFake.Keys |> Seq.toArray)
+                if debugPtbl then printfn "%A NUOVO ID: %A => %A" state.Timestamp leapId (leapToFake.Keys |> Seq.toArray)
                 pointable
 
     // Evento contenente il frame corrente e l'ID dell'oggetto a cui si riferisce la feature.

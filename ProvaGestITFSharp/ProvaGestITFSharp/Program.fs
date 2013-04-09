@@ -10,6 +10,14 @@ open System.Drawing
 open System.Numerics
 open System.Collections.Generic
 
+type LeapInfoType =
+    | Hand
+    | HandZombie
+    | Finger
+    | FingerZombie
+    | Tool
+    | ToolZombie
+
 (* coppia ID - stato {active, move, notactive, zombie} *)
 let visibleObjects = new Dictionary<FakeId, LeapInfoType>()
 (* lista di frame dell'ultimo 1/2 sec *)
