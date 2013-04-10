@@ -90,8 +90,11 @@
         | NotActiveTool = 8
 
     type IStateCleaner<'T,'U> =
-        (* Clears the history preceding a timestamp, returns the elements that are being dropped *)
-        abstract member TruncateHistory: TimeStamp -> 'T list
+        (*
+         * Clears the history preceding a timestamp, calling the given function for each of them as soon as it has been removed;
+         * returns the elements that have been dropped
+         *)
+        abstract member TruncateHistory: ('T -> unit) -> TimeStamp -> unit
 
         (* Predicts the model state at the given timestamp, as an evolution of the currently known information *)
         abstract member Predict: TimeStamp -> unit
@@ -138,26 +141,23 @@
                 leapToFake.[leapId]
 
         interface IStateCleaner<MyHand,Hand> with
-            member x.TruncateHistory(t) =
+            member x.TruncateHistory f t =
                 let removedIds =
                     handTimestamps
                     |> Seq.filter (fun x -> x.Value < t)
                     |> Seq.map (fun x -> x.Key)
                     |> Seq.toArray
-                let removedHands =
-                    removedIds
-                    |> Seq.map (fun x -> state.HandList.[leapToFake.[x]])
-                    |> Seq.toList
                 for leapId in removedIds do
                     let fakeId = leapToFake.[leapId]
+                    let h = state.HandList.[leapToFake.[leapId]]
                     for p in state.PointableList.Values do
                         if p.IdHand = fakeId then
                             p.IdHand <- null
                     handTimestamps.Remove(leapId) |> ignore
                     state.HandList.Remove(fakeId) |> ignore
                     leapToFake.Remove(leapId) |> ignore
+                    f h
                     if debugHand then printfn "RIMOSSO: %A" leapId
-                removedHands
 
             member x.Predict(t) =
                 for h in state.HandList do
@@ -229,22 +229,19 @@
         let mutable lastTimestamp:TimeStamp = -1L
 
         interface IStateCleaner<MyPointable,Pointable> with
-            member x.TruncateHistory(t) =
+            member x.TruncateHistory f t =
                 let removedIds =
                     pointableTimestamps
                     |> Seq.filter (fun x -> x.Value < t)
                     |> Seq.map (fun x -> x.Key)
                     |> Seq.toArray
-                let removedPointables =
-                    removedIds
-                    |> Seq.map (fun x -> state.PointableList.[leapToFake.[x]])
-                    |> Seq.toList
                 for leapId in removedIds do
+                    let p = state.PointableList.[leapToFake.[leapId]]
                     pointableTimestamps.Remove(leapId) |> ignore
                     state.PointableList.Remove(leapToFake.[leapId]) |> ignore
                     leapToFake.Remove(leapId) |> ignore
+                    f p
                     if debugPtbl then printfn "%A RIMUOVO: %A => %A" state.Timestamp leapId (leapToFake.Keys |> Seq.toArray)
-                removedPointables
             
             member x.TryUpdate(p) =
                 let leapId = p.Id
@@ -307,7 +304,7 @@
         inherit Leap.Listener()
         let ctrl = new Controller()
 
-        let zombieWindow = 2000000L
+        let zombieWindow = 200000L
         let state = new MyFrame()
         let handCleaner = new MyHandCleaner(state)
         let pointableCleaner = new MyPointableCleaner(state, handCleaner) :> IStateCleaner<_,_>
@@ -332,16 +329,16 @@
 
             state.Timestamp <- currenttimestamp
 
-            let removedPointables = pointableCleaner.TruncateHistory(currenttimestamp - zombieWindow)
-            for pointable in removedPointables do
-                let e = new LeapEventArgs(state, pointable.Id)
-                let t = if pointable.IsFinger then LeapFeatureTypes.NotActiveFinger else LeapFeatureTypes.NotActiveTool
-                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+            pointableCleaner.TruncateHistory (fun pointable ->
+                                                let e = new LeapEventArgs(state, pointable.Id)
+                                                let t = if pointable.IsFinger then LeapFeatureTypes.NotActiveFinger else LeapFeatureTypes.NotActiveTool
+                                                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+                ) (currenttimestamp - zombieWindow)
 
-            let removedHands = handCleaner.TruncateHistory(currenttimestamp - zombieWindow)
-            for hand in removedHands do
-                let e = new LeapEventArgs(state, hand.Id)
-                sensorEvent.Trigger(new SensorEventArgs<_,_>(LeapFeatureTypes.NotActiveHand, e))
+            handCleaner.TruncateHistory (fun hand ->
+                                                let e = new LeapEventArgs(state, hand.Id)
+                                                sensorEvent.Trigger(new SensorEventArgs<_,_>(LeapFeatureTypes.NotActiveHand, e))
+                ) (currenttimestamp - zombieWindow)
 
             handCleaner.Predict(currenttimestamp)
             pointableCleaner.Predict(currenttimestamp)
