@@ -40,7 +40,7 @@ module LeapTrayApplication
                     |> Seq.length
                 let thresh = int(float(frameQueue.Count) * 0.9)
                 l > thresh
-        exists && (lastFrameInQueue.PointableList.[id].Position.x - frameQueue.Peek().PointableList.[id].Position.x > 150.f)
+        exists && (lastFrameInQueue.PointableList.[id].Position.x - frameQueue.Peek().PointableList.[id].Position.x > 50.f)
     )
     let moveon = new Predicate<LeapEventArgs>(fun x ->
         let id = x.Id
@@ -82,39 +82,32 @@ module LeapTrayApplication
                 )
         exists
     )
-    (*
     let openhand = new Predicate<LeapEventArgs>(fun x ->
-        printfn ("Evaluating OPENHAND...")
-        let x =
-            frameQueue
-            |> Seq.pairwise
-            |> Seq.takeWhile (fun (f1,f2) -> f1.PointableList.Count <= f2.PointableList.Count)
-        if x |> Seq.length <> 0 then
-            let zeroFingerFirst,zeroFingerSecond = (x |> Seq.head)
-            zeroFingerSecond.
-            //zer .PointableList.Count = 0)
-        else
-            ()
-        //printfn "%A - %A - %A " zeroFingerFirst increasingPointables (lastFrameInQueue.PointableList.Count >= 4)
-        //increasingPointables && lastFrameInQueue.PointableList.Count >= 4
-    )
-    *)
-    let openhand = new Predicate<LeapEventArgs>(fun x -> false)
+        (*
+        let directionPerpendicolari =
+            let f = lastFrameInQueue
+            f.PointableList.Values
+            |> Seq.forall (fun x -> if x.IdHand <> null then
+                                        let angle = (x.Direction.AngleTo(f.HandList.[x.IdHand].Normal)) * 180.F / (float32)System.Math.PI
+                                        (angle >= 70.F) && (angle <= 100.F)
+                                    else
+                                        false
+                          )
+        directionPerpendicolari
+        *)
+        let culo =
+            lastFrameInQueue.PointableList.Values
+            |> Seq.filter (fun x -> 
+        )
     let closehand = new Predicate<LeapEventArgs>(fun x ->
-        //printfn ("Evaluating CLOSEHAND...")
         let decreasingPointables =
             frameQueue
             |> Seq.pairwise
             |> Seq.exists (fun (f1,f2) -> f1.HandList.Count = f2.HandList.Count && f1.PointableList.Count <= f2.PointableList.Count)
         decreasingPointables
     )
-    let radiusSphereMin n =
-        new Predicate<LeapEventArgs>(fun x -> x.Frame.HandList.Item(x.Id).SphereRadius <= n)
-    let radiusSphereMax n =
-        new Predicate<LeapEventArgs>(fun x -> x.Frame.HandList.Item(x.Id).SphereRadius >= n)
-
     let pointableCountIs n =
-        new Predicate<LeapEventArgs>(fun x -> printfn "vedo %d dita e ne voglio %d" x.Frame.PointableList.Count n
+        new Predicate<LeapEventArgs>(fun x -> //printfn "vedo %d dita e ne voglio %d" x.Frame.PointableList.Count n
                                               x.Frame.PointableList.Count = n)
     (* GroundTerms definitions *)
     let vedodito = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, p)
@@ -128,43 +121,50 @@ module LeapTrayApplication
     let nonvedodito3 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 3)
     let nonvedodito2 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 2)
     let nonvedodito1 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 1)
+    let nonvedodito0 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 0)
 
-    let muovoditodx = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveright)
+    let muovoditodx = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger)
     let muovoditoindietro = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveback)
     let muovoditoavanti = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveon)
     let apromano = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
-    let chiudomano = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, radiusSphereMax 80.F)
-    let muovimano = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, radiusSphereMin 80.F)
+    let chiudomano = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
 
     (* Gesture definition *)
     let s1 = new Sequence<_,_>(vedodito1, vedodito2)
     let s2 = new Sequence<_,_>(s1, vedodito3)
     let s3 = new Sequence<_,_>(s2, vedodito4)
     let s4 = new Sequence<_,_>(s3, vedodito5)
-    let m1 = new Sequence<_,_>(s4, muovimano)
-    let s5 = new Sequence<_,_>(m1, nonvedodito4)
-    let s6 = new Sequence<_,_>(m1, nonvedodito3)
-    let s7 = new Sequence<_,_>(m1, nonvedodito2)
-    let s8 = new Sequence<_,_>(m1, chiudomano)
+    let m1 = new Sequence<_,_>(s4, apromano)
     m1.Gesture.Add(fun _ -> SendKeys.SendWait("^{ESC}"))
-    s5.Gesture.Add(fun _ -> printfn "MA CI ARRIVI CAZZO??")
-    s8.Gesture.Add(fun _ -> SendKeys.SendWait("{ESC}"))
-    let netdestocazzo = m1.ToGestureNet(s)
+    let net1 = m1.ToGestureNet(s)
+    let seq = new Sequence<_,_>(m1, muovoditodx)
+    seq.Gesture.Add(fun _ -> SendKeys.SendWait("{RIGHT 10}"))
+//    let net2 = seq.ToGestureNet(s)
 
-    let seq = new Sequence<_,_>(vedodito, muovoditodx)
-    muovoditodx.Gesture.Add(fun _ -> SendKeys.SendWait("MARTA"))
-    let net = muovoditodx.ToGestureNet(s)
+    let s6 = new Sequence<_,_>(nonvedodito4, nonvedodito3)
+    let s7 = new Sequence<_,_>(s6, nonvedodito2)
+    s7.Gesture.Add(fun _ -> SendKeys.SendWait("{ESC}"))
+    let netdestocazzo2 = s7.ToGestureNet(s)
 
-    let net1 = apromano.ToGestureNet(s)
-    (*net1.Completion.Add(fun _ ->
+//    m1.Gesture.Add(fun _ -> SendKeys.SendWait("% (q)")) // ^{ESC}
+//    s2.Gesture.Add(fun _ -> printfn "DEEEEEEEE 2")
+//    s3.Gesture.Add(fun _ -> printfn "DEEEEEEEE 3")
+//    s4.Gesture.Add(fun _ -> printfn "DEEEEEEEE 4")
+//    s5.Gesture.Add(fun _ -> printfn "DEEEEEEEE 5")
+//    s6.Gesture.Add(fun _ -> printfn "DEEEEEEEE 6")
+//    s8.Gesture.Add(fun _ -> SendKeys.SendWait("% (n)"))
+
+
+    (*let net1 = apromano.ToGestureNet(s)
+    net1.Completion.Add(fun _ ->
                             SendKeys.SendWait("^{ESC}")
                             printfn ("[OPEN HAND]")) // dovrebbe aprirsi il menu grosso di win8
-                            *)
+                            
     let net2 = chiudomano.ToGestureNet(s)
     net1.Completion.Add(fun _ ->
                             SendKeys.SendWait("^{F4}")
                             printfn ("[CLOSE HAND]")) // dovrebbe chiudere la finestra corrente
-    
+    *)
     (* Sensor *)
     let UpdateInformations (f:MyFrame, e:LeapFeatureTypes, id:FakeId) =
         (* Update informations in the last enqueued frame *)
@@ -178,7 +178,6 @@ module LeapTrayApplication
             | _ -> () 
 
     (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
-        printfn "NOT ACTIVE POINTABLE"
         (* Removing too old frames *)
         let t = e.Event.Frame.Timestamp
         while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
