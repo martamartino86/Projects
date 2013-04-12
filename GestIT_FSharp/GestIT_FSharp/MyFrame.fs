@@ -1,15 +1,36 @@
-﻿namespace MyLeapFrame
+﻿/// <summary>
+/// MyFrame is a personal representation of LEAP's frame informations.
+/// </summary>
+namespace MyLeapFrame
 
     open Leap
     open System.Collections.Generic
 
+    /// <summary>
+    /// Representation of ids.
+    /// </summary>
     [<AllowNullLiteralAttribute>]
     type FakeId () =
         class
         end
 
+    /// typeparam name="TimeStamp">
+    /// Defines a generic type of timestamp.
+    /// </typeparam>
     type TimeStamp = int64
 
+    /// <summary>
+    /// Defines a Pointable object, which could be a finger or a tool.
+    /// </summary>
+    /// <param name="i">FakeId.</param>
+    /// <param name="ih">FakeId of the hand to which the Pointable belongs to.</param>
+    /// <param name="d">A Vector representing direction.</param>
+    /// <param name="p">A Vector representing position.</param>
+    /// <param name="v">A Vector representing velocity.</param>
+    /// <param name="finger">A boolean representing if Pointable is a finger.</param>
+    /// <param name="tool">A boolean representing if Pointable is a tool.</param>
+    /// <param name="l">Length of Pointable.</param>
+    /// <param name="w">Width of Pointable.</param>
     type MyPointable (i:FakeId, ih:FakeId, d:Vector, p:Vector, v:Vector, finger:bool, tool:bool, l:float32, w:float32) =
         let mutable direction = new Vector(d)
         let mutable position = new Vector(p)

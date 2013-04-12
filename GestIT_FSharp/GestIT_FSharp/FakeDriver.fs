@@ -1,5 +1,7 @@
-﻿namespace FakeDriver
-
+﻿/// <summary>
+/// LeapDriver implements a model for the elaboration of LEAP's raw datas.
+/// </summary>
+namespace LeapDriver
     open System.Windows.Forms
     open System.Drawing
     open System.Collections.Generic
@@ -9,6 +11,7 @@
     open Leap
     open System.IO
 
+(*
     // KEYBOARD features that have to be notified from the sensor //
     type KeyFeatureTypes =
         | KeyDown = 0
@@ -62,14 +65,11 @@
         | Start = 0
         | Move = 1
         | End = 2
-
+*)
 
         
 // *** LEAP *** //
  
-    
-    //let outfile = File.CreateText("dataleap.txt")
-
     // devo tenermi traccia di cosa ho visto nel frame (precedente): tengo dunque un dizionario in cui la Key e' l'ID
     // (NB: ID e' un campo unico per ogni frame) e il valore è il Frame stesso.
     // In tal modo, quando ricevo un nuovo frame, controllo che gli ID:
@@ -77,7 +77,9 @@
     // * siano già presenti -> mando Move
     // * non siano più presenti -> mando NotActive
 
-    (* Information sent on event triggering *)
+    /// <summary>
+    /// Information sent on event triggering.
+    /// </summary>
     type LeapFeatureTypes =
         | ActiveHand = 0
         | ActiveFinger = 1
@@ -89,42 +91,73 @@
         | NotActiveFinger = 7
         | NotActiveTool = 8
 
+    /// <summary>
+    /// Generic type of Cleaner, which will operate on frame's history and current application state.
+    /// </summary>
     type IStateCleaner<'T,'U> =
-        (*
-         * Clears the history preceding a timestamp, calling the given function for each of them as soon as it has been removed;
-         * returns the elements that have been dropped
-         *)
+        
+        /// <summary>
+        /// Clears the history preceding a timestamp, calling the given function for each of them as soon as it has been removed;
+        /// returns the elements that have been dropped.
+        /// </summary>
+        /// <param name="removeCallback"> A functioon to be called on each element immediately after its removal. </param>
+        /// <param name="timestamp"> Minimum timestamp which should be kept in the current status. </param>
+        /// <returns></returns>
         abstract member TruncateHistory: ('T -> unit) -> TimeStamp -> unit
 
-        (* Predicts the model state at the given timestamp, as an evolution of the currently known information *)
+        /// <summary>
+        /// Predicts the model state at the given timestamp, as an evolution of the currently known information.
+        /// </summary>
+        /// <param name="timestamp">Time to which the model state is predicted.</param>
+        /// <returns>unit</returns>
         abstract member Predict: TimeStamp -> unit
 
-        (*
-         * Updates the current state using the new information (assuming matching ids);
-         * returns the model representation of the new information if the update succeeded
-         *)
+        /// <summary>
+        /// Updates the current state using the new information (assuming matching ids).
+        /// returns the model representation of the new information if the update succeeded
+        /// </summary>
+        /// <param name="visibleObject">Hand or pointable to be updated.</param>
+        /// <returns>An updated Hand or Pointable, assuming matching ids; None otherwise.</returns>
         abstract member TryUpdate: 'U -> 'T option
 
-        (*
-         * Tries to corrects the current state using the new information;
-         * returns the model representation of the new information if the correction succeeded
-         *)
+        /// <summary>
+        /// Tries to corrects the current state using the new information.
+        /// </summary>
+        /// <param name="visibleObject">Hand or pointable to be corrected.</param>
+        /// <returns>The model representation of the new information if the correction succeeded; None otherwise.</returns>
         abstract member Correct: 'U -> 'T option
 
-        (*
-         * Extends the current state using the new information;
-         * returns the model representation of the new information
-         *)
+        /// <summary>
+        /// Extends the current state using the new information.
+        /// </summary>
+        /// <param name="visibleObject">Hand or pointable which informations will update the current state.</param>
+        /// <returns>The model representation of the new information. </returns>
         abstract member Extend: 'U -> 'T
 
+    /// typeparam name="LeapId">
+    /// Defines a generic type of Leap ID.
+    /// </typeparam>
     type LeapId = int
 
     type MyHandCleaner(s:MyFrame) =
         let debugHand = false
 
+        /// <summary>
+        /// Calculates the distance between two hands.
+        /// </summary>
+        /// <param name="h1">First hand</param>
+        /// <param name="h2">Second hand</param>
+        /// <returns>The distance in float32.</returns>
         let handDistance (h1:MyHand) (h2:Hand) =
             (h1.Position - h2.PalmPosition).Magnitude
-
+        
+        /// <summary>
+        /// Calculates if a new hand (which means a hand whose ID hasn't been seen until now) may be a zombie hand (a disappeared one).
+        /// </summary>
+        /// <param name="zombiets">Last real timestamp of zombie hand.</param>
+        /// <param name="zombiehand">Zombie hand.</param>
+        /// <param name="newhand">New hand.</param>
+        /// <returns>A boolean which represents if two hands are the same.</returns>
         let isTheSameHand (zombiets:TimeStamp) (zombiehand:MyHand) (newhand:Hand) =
             let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
             (handDistance zombiehand newhand) < float32(newhand.Frame.Timestamp - zombiets) * speedError + 3.F
@@ -134,6 +167,11 @@
         let leapToFake = new Dictionary<LeapId, FakeId>()
         let mutable lastTimestamp:TimeStamp = -1L
         
+        /// <summary>
+        /// Returns the FakeId corresponding to parameter LeapId.
+        /// </summary>
+        /// <param name="leapId">Hand's LeapID.</param>
+        /// <returns>Hand's FakeID.</returns>
         member x.GetFakeId(leapId:LeapId) =
             if leapId = Leap.Hand.Invalid.Id then
                 null
@@ -213,7 +251,14 @@
         let debugPtbl = false
         let fingerDistance (p1:MyPointable) (p2:Pointable) =
             (p1.Position - p2.TipPosition).Magnitude
-    
+        
+        /// <summary>
+        /// Calculates if a new pointable (which means a hand whose ID hasn't been seen until now) may be a zombie pointable (a disappeared one).
+        /// </summary>
+        /// <param name="zombiets">Last real timestamp of zombie pointable.</param>
+        /// <param name="zombiePointable">Zombie pointable.</param>
+        /// <param name="newPointable">New pointable.</param>
+        /// <returns>A boolean which represents if two pointables are the same.</returns>
         let isTheSameFinger (zombiets:TimeStamp) (zombiePointable:MyPointable) (newPointable:Pointable) =
             let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
             let diffLength = System.Math.Abs(zombiePointable.Length - newPointable.Length) // finger length
@@ -292,7 +337,11 @@
                 if debugPtbl then printfn "%A NUOVO ID: %A => %A" state.Timestamp leapId (leapToFake.Keys |> Seq.toArray)
                 pointable
 
-    // Evento contenente il frame corrente e l'ID dell'oggetto a cui si riferisce la feature.
+    /// <summary>
+    /// Represents the event to be triggered by LeapSensor.
+    /// </summary>
+    /// <param name="f">Frame containing current state informations.</param>
+    /// <param name="id">ID of the object which the frame is referred to.</param>
     type LeapEventArgs(f:MyFrame, id:FakeId) =
         inherit System.EventArgs()
         // Oggetto Frame corrente.
@@ -300,6 +349,9 @@
         // ID dell'oggetto a cui si riferisce la feature (es. ID di un Hand / Finger / Tool).
         member this.Id = id
 
+    /// <summary>
+    /// Sensor that receives raw data from LEAP and trigger new events to its listeners. It implements LEAP's <c>Listener</c> interface to communicate with the device.
+    /// </summary>
     type LeapSensor () as this =
         inherit Leap.Listener()
         let ctrl = new Controller()
