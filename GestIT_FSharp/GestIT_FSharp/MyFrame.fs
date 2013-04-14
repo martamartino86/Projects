@@ -41,19 +41,47 @@ namespace MyLeapFrame
         let isTool = tool
         let length = l
         let width = w
+        /// <summary>
+        /// Get or set direction property.
+        /// </summary>
+        /// <param name="d">Direction.</param>
         member this.Direction with get() = direction and set(d) = direction <- new Vector(d)
+        /// <summary>
+        /// Get or set position property.
+        /// </summary>
+        /// <param name="d">Position.</param>
         member this.Position with get() = position and set(p) = position <- new Vector(p)
+        /// <summary>
+        /// Get or set velocity property.
+        /// </summary>
+        /// <param name="d">Velocity.</param>
         member this.Velocity with get() = velocity and set(v) = velocity <- new Vector(v)
         member this.Id with get() = id
+        /// <summary>
+        /// Get or set the id of the hand to which the pointable belongs to.
+        /// </summary>
+        /// <param name="d">Hand id.</param>
         member this.IdHand with get() = idHand and set(v) = idHand <- v
         member this.Length = length
         member this.Width = width
         member this.IsFinger = isFinger
         member this.IsTool = isTool
+        /// <summary>
+        /// Clones the MyPointable object on which the method is called.
+        /// </summary>
         member this.Clone () =
             new MyPointable(this.Id, this.IdHand, this.Direction, this.Position, this.Velocity, this.IsFinger, this.IsTool, this.Length, this.Width)
-        //member this.Rename (newi,newih) = new MyPointable(newi,newih,direction,position,velocity,isFinger,isTool,length,width)
-        
+      
+    /// <summary>
+    /// Defines a Hand object.
+    /// </summary>
+    /// <param name="i">FakeId.</param>
+    /// <param name="d">A Vector representing direction.</param>
+    /// <param name="p">A Vector representing position.</param>
+    /// <param name="v">A Vector representing velocity.</param>
+    /// <param name="n">A Vector perpendicular to the plane formed by the palm of the hand.</param>
+    /// <param name="c">A Vector representing the center of the sphere.</param>
+    /// <param name="r">The radius of the sphere.</param> 
     type MyHand (i:FakeId, d:Vector, p:Vector, v:Vector, n:Vector, c:Vector, r:float32) =
         let mutable direction = new Vector(d)
         let mutable position = new Vector(p)
@@ -62,38 +90,48 @@ namespace MyLeapFrame
         let sphereCenter = new Vector(c)
         let sphereRadius = r
         let id = i
-        member this.Direction = direction
+        /// <summary>
+        /// Get or set direction property.
+        /// </summary>
+        /// <param name="d">Direction.</param>
+        member this.Direction with get() = direction and set(d) = direction <- d
+        /// <summary>
+        /// Get or set position property.
+        /// </summary>
+        /// <param name="d">Position.</param>
         member this.Position with get() = position and set(p) = position <- p
-        member this.Velocity = velocity
+        /// <summary>
+        /// Get or set velocity property.
+        /// </summary>
+        /// <param name="d">Velocity.</param>
+        member this.Velocity with get() = velocity and set(v) = velocity <- v
         member this.Normal = normal
+        /// <summary>
+        /// Get the hand id.
+        /// </summary>
         member this.Id with get() = id
         member this.SphereCenter = sphereCenter
         member this.SphereRadius = sphereRadius
+        /// <summary>
+        /// Clones the MyHand object on which the method is called.
+        /// </summary>
         member this.Clone () =
             new MyHand(this.Id, this.Direction, this.Position, this.Velocity, this.Normal, this.SphereCenter, this.SphereRadius)
-        //member this.Rename (newi) = new MyHand(newi,direction,position,velocity,normal,sphereCenter,sphereRadius)
 
+    /// <summary>
+    /// Defines a Frame object. When created, a frame is always invalid.
+    /// </summary>
     type MyFrame () =
-        //let mutable idFrame = f.Id
         let pointableList = new Dictionary<FakeId,MyPointable>()
         let handList = new Dictionary<FakeId,MyHand>()
         let mutable timestamp:TimeStamp = -1L
-        (*do
-            if f.Equals(Frame.Invalid) then
-                idFrame <- (int64)(-1)
-            else 
-                for h in f.Hands do
-                    let hh = new MyHand(h)
-                    handList.Add(hh.Id, hh)
-                for p in f.Pointables do
-                    let pp = new MyPointable(p)
-                    pointableList.Add(pp.Id, pp)
-                    *)
-        //member this.IdFrame = idFrame
         member this.PointableList = pointableList
         member this.HandList = handList
         member this.Timestamp with get() = timestamp and set(t) = timestamp <- t
         member this.IsValid = timestamp >= 0L
+        /// <summary>
+        /// Clones the MyFrame object on which the method is called.
+        /// </summary>
         member this.Clone () =
             let f = new MyFrame()
             f.Timestamp <- this.Timestamp
@@ -102,8 +140,3 @@ namespace MyLeapFrame
             for p in this.PointableList do
                 f.PointableList.Add(p.Key, p.Value.Clone())
             f
-
-        (*
-            if idFrame <> (int64)(-1) then true
-            else false
-            *)
