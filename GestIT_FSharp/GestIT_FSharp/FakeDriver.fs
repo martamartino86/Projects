@@ -6,7 +6,7 @@ namespace LeapDriver
     open System.Drawing
     open System.Collections.Generic
     open Microsoft.FSharp.Reflection
-    open MyLeapFrame
+    open ClonableLeapFrame
     open GestIT
     open Leap
     open System.IO
@@ -139,7 +139,7 @@ namespace LeapDriver
     /// </typeparam>
     type LeapId = int
 
-    type MyHandCleaner(s:MyFrame) =
+    type ClonableHandCleaner(s:ClonableFrame) =
         let debugHand = false
 
         /// <summary>
@@ -148,7 +148,7 @@ namespace LeapDriver
         /// <param name="h1">First hand</param>
         /// <param name="h2">Second hand</param>
         /// <returns>The distance in float32.</returns>
-        let handDistance (h1:MyHand) (h2:Hand) =
+        let handDistance (h1:ClonableHand) (h2:Hand) =
             (h1.Position - h2.PalmPosition).Magnitude
         
         /// <summary>
@@ -158,7 +158,7 @@ namespace LeapDriver
         /// <param name="zombiehand">Zombie hand.</param>
         /// <param name="newhand">New hand.</param>
         /// <returns>A boolean which represents if two hands are the same.</returns>
-        let isTheSameHand (zombiets:TimeStamp) (zombiehand:MyHand) (newhand:Hand) =
+        let isTheSameHand (zombiets:TimeStamp) (zombiehand:ClonableHand) (newhand:Hand) =
             let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
             (handDistance zombiehand newhand) < float32(newhand.Frame.Timestamp - zombiets) * speedError + 3.F
 
@@ -178,7 +178,7 @@ namespace LeapDriver
             else
                 leapToFake.[leapId]
 
-        interface IStateCleaner<MyHand,Hand> with
+        interface IStateCleaner<ClonableHand,Hand> with
             member x.TruncateHistory f t =
                 let removedIds =
                     handTimestamps
@@ -207,7 +207,7 @@ namespace LeapDriver
                 let leapId = h.Id
                 if leapToFake.ContainsKey(leapId) then
                     let fakeId = leapToFake.[leapId]
-                    let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                    let hand = new ClonableHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
                     state.HandList.[fakeId] <- hand
                     handTimestamps.[leapId] <- h.Frame.Timestamp
                     Some hand
@@ -227,7 +227,7 @@ namespace LeapDriver
                 | None -> None
                 | Some (oldLeapId, hand) ->
                     let fakeId = hand.Id
-                    let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                    let hand = new ClonableHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
                     handTimestamps.Remove(oldLeapId) |> ignore
                     leapToFake.Remove(oldLeapId) |> ignore
                     state.HandList.[fakeId] <- hand
@@ -239,17 +239,17 @@ namespace LeapDriver
             member x.Extend(h) = 
                 let leapId = h.Id
                 let fakeId = new FakeId()
-                let hand = new MyHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
+                let hand = new ClonableHand(fakeId, h.Direction, h.PalmPosition, h.PalmVelocity, h.PalmNormal, h.SphereCenter, h.SphereRadius)
                 state.HandList.Add(fakeId, hand)
                 handTimestamps.Add(leapId, h.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
                 if debugHand then printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
                 hand
 
-    type MyPointableCleaner(s:MyFrame,hc:MyHandCleaner) =
+    type ClonablePointableCleaner(s:ClonableFrame,hc:ClonableHandCleaner) =
         let epsilon = 1000.0f * 1.5F
         let debugPtbl = false
-        let fingerDistance (p1:MyPointable) (p2:Pointable) =
+        let fingerDistance (p1:ClonablePointable) (p2:Pointable) =
             (p1.Position - p2.TipPosition).Magnitude
         
         /// <summary>
@@ -259,7 +259,7 @@ namespace LeapDriver
         /// <param name="zombiePointable">Zombie pointable.</param>
         /// <param name="newPointable">New pointable.</param>
         /// <returns>A boolean which represents if two pointables are the same.</returns>
-        let isTheSameFinger (zombiets:TimeStamp) (zombiePointable:MyPointable) (newPointable:Pointable) =
+        let isTheSameFinger (zombiets:TimeStamp) (zombiePointable:ClonablePointable) (newPointable:Pointable) =
             let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
             let diffLength = System.Math.Abs(zombiePointable.Length - newPointable.Length) // finger length
             let diffWidth = System.Math.Abs(zombiePointable.Width - newPointable.Width) // finger width
@@ -273,7 +273,7 @@ namespace LeapDriver
         let leapToFake = new Dictionary<LeapId, FakeId>()
         let mutable lastTimestamp:TimeStamp = -1L
 
-        interface IStateCleaner<MyPointable,Pointable> with
+        interface IStateCleaner<ClonablePointable,Pointable> with
             member x.TruncateHistory f t =
                 let removedIds =
                     pointableTimestamps
@@ -292,7 +292,7 @@ namespace LeapDriver
                 let leapId = p.Id
                 if leapToFake.ContainsKey(leapId) then
                     let fakeId = leapToFake.[leapId]
-                    let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                    let pointable = new ClonablePointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
                     state.PointableList.[fakeId] <- pointable
                     pointableTimestamps.[leapId] <- p.Frame.Timestamp
                     Some pointable
@@ -318,7 +318,7 @@ namespace LeapDriver
                 | None -> None
                 | Some (oldLeapId,pointable) ->
                     let fakeId = pointable.Id
-                    let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                    let pointable = new ClonablePointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
                     pointableTimestamps.Remove(oldLeapId) |> ignore
                     leapToFake.Remove(oldLeapId) |> ignore
                     state.PointableList.[fakeId] <- pointable
@@ -330,7 +330,7 @@ namespace LeapDriver
             member x.Extend(p) =
                 let leapId = p.Id
                 let fakeId = new FakeId()
-                let pointable = new MyPointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
+                let pointable = new ClonablePointable(fakeId, handCleaner.GetFakeId(p.Hand.Id), p.Direction, p.TipPosition, p.TipVelocity, p.IsFinger, p.IsTool, p.Length, p.Width)
                 state.PointableList.Add(fakeId, pointable)
                 pointableTimestamps.Add(leapId, p.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
@@ -342,7 +342,7 @@ namespace LeapDriver
     /// </summary>
     /// <param name="f">Frame containing current state informations.</param>
     /// <param name="id">ID of the object which the frame is referred to.</param>
-    type LeapEventArgs(f:MyFrame, id:FakeId) =
+    type LeapEventArgs(f:ClonableFrame, id:FakeId) =
         inherit System.EventArgs()
         // Oggetto Frame corrente.
         member this.Frame = f
@@ -357,9 +357,9 @@ namespace LeapDriver
         let ctrl = new Controller()
 
         let zombieWindow = 200000L
-        let state = new MyFrame()
-        let handCleaner = new MyHandCleaner(state)
-        let pointableCleaner = new MyPointableCleaner(state, handCleaner) :> IStateCleaner<_,_>
+        let state = new ClonableFrame()
+        let handCleaner = new ClonableHandCleaner(state)
+        let pointableCleaner = new ClonablePointableCleaner(state, handCleaner) :> IStateCleaner<_,_>
         let handCleaner = handCleaner :> IStateCleaner<_,_>
 
         let sensorEvent = new Event<SensorEventArgs<LeapFeatureTypes, LeapEventArgs>>()

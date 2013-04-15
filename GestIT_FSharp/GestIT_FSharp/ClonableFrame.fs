@@ -1,7 +1,7 @@
 ﻿/// <summary>
 /// MyFrame is a personal representation of LEAP's frame informations.
 /// </summary>
-namespace MyLeapFrame
+namespace ClonableLeapFrame
 
     open Leap
     open System.Collections.Generic
@@ -31,7 +31,7 @@ namespace MyLeapFrame
     /// <param name="tool">A boolean representing if Pointable is a tool.</param>
     /// <param name="l">Length of Pointable.</param>
     /// <param name="w">Width of Pointable.</param>
-    type MyPointable (i:FakeId, ih:FakeId, d:Vector, p:Vector, v:Vector, finger:bool, tool:bool, l:float32, w:float32) =
+    type ClonablePointable (i:FakeId, ih:FakeId, d:Vector, p:Vector, v:Vector, finger:bool, tool:bool, l:float32, w:float32) =
         let mutable direction = new Vector(d)
         let mutable position = new Vector(p)
         let mutable velocity = new Vector(v)
@@ -70,7 +70,7 @@ namespace MyLeapFrame
         /// Clones the MyPointable object on which the method is called.
         /// </summary>
         member this.Clone () =
-            new MyPointable(this.Id, this.IdHand, this.Direction, this.Position, this.Velocity, this.IsFinger, this.IsTool, this.Length, this.Width)
+            new ClonablePointable(this.Id, this.IdHand, this.Direction, this.Position, this.Velocity, this.IsFinger, this.IsTool, this.Length, this.Width)
       
     /// <summary>
     /// Defines a Hand object.
@@ -82,7 +82,7 @@ namespace MyLeapFrame
     /// <param name="n">A Vector perpendicular to the plane formed by the palm of the hand.</param>
     /// <param name="c">A Vector representing the center of the sphere.</param>
     /// <param name="r">The radius of the sphere.</param> 
-    type MyHand (i:FakeId, d:Vector, p:Vector, v:Vector, n:Vector, c:Vector, r:float32) =
+    type ClonableHand (i:FakeId, d:Vector, p:Vector, v:Vector, n:Vector, c:Vector, r:float32) =
         let mutable direction = new Vector(d)
         let mutable position = new Vector(p)
         let mutable velocity = new Vector(v)
@@ -116,14 +116,14 @@ namespace MyLeapFrame
         /// Clones the MyHand object on which the method is called.
         /// </summary>
         member this.Clone () =
-            new MyHand(this.Id, this.Direction, this.Position, this.Velocity, this.Normal, this.SphereCenter, this.SphereRadius)
+            new ClonableHand(this.Id, this.Direction, this.Position, this.Velocity, this.Normal, this.SphereCenter, this.SphereRadius)
 
     /// <summary>
     /// Defines a Frame object. When created, a frame is always invalid.
     /// </summary>
-    type MyFrame () =
-        let pointableList = new Dictionary<FakeId,MyPointable>()
-        let handList = new Dictionary<FakeId,MyHand>()
+    type ClonableFrame () =
+        let pointableList = new Dictionary<FakeId,ClonablePointable>()
+        let handList = new Dictionary<FakeId,ClonableHand>()
         let mutable timestamp:TimeStamp = -1L
         member this.PointableList = pointableList
         member this.HandList = handList
@@ -133,7 +133,7 @@ namespace MyLeapFrame
         /// Clones the MyFrame object on which the method is called.
         /// </summary>
         member this.Clone () =
-            let f = new MyFrame()
+            let f = new ClonableFrame()
             f.Timestamp <- this.Timestamp
             for h in this.HandList do
                 f.HandList.Add(h.Key, h.Value.Clone())
