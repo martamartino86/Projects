@@ -19,10 +19,8 @@ module LeapTrayApplication
 
     (* Predicates *)
     let speed (x:float32) (y:float32) = x / y
-    let p = new Predicate<LeapEventArgs>(fun x ->
-        true
-    )
-    let moveright = new Predicate<LeapEventArgs>(fun x ->
+    let p = new Predicate<LeapEventArgs>(fun x -> true)
+    let movefingerright = new Predicate<LeapEventArgs>(fun x ->
 //        printfn "Evaluating predicate moveright..."
         let id = x.Id
         let exists =
@@ -46,6 +44,7 @@ module LeapTrayApplication
                 l > thresh
         exists && (lastFrameInQueue.PointableList.[id].Position.x - frameQueue.Peek().PointableList.[id].Position.x > 50.f)
     )
+
     let moveon = new Predicate<LeapEventArgs>(fun x ->
         let id = x.Id
         let exists =
@@ -88,34 +87,26 @@ module LeapTrayApplication
     )
     let openhand = new Predicate<LeapEventArgs>(fun x ->
         let f = x.Frame
-        if f.HandList.Count = 1 && f.PointableList.Count >= 4 then
-            ts_openedhand := f.Timestamp // MODIFICO STATO???
-            true
-        else
-            false
+        f.HandList.Count = 1 && f.PointableList.Count >= 4
     )
 //    let closehand (x:LeapEventArgs) =
 //        let f = x.Frame
 //        f.HandList.Count = 1 && f.PointableList.Count <= 1
     let closehand = new Predicate<LeapEventArgs>(fun x ->
         let f = x.Frame
-        if f.HandList.Count = 1 && f.PointableList.Count <= 1 then
-            ts_closedhand := f.Timestamp
-            true
-        else
-            false
-        )
+        f.HandList.Count = 1 && f.PointableList.Count <= 1
+    )
 
 //    let timedevent (p:Predicate<LeapEventArgs>) refts thresh (x:LeapEventArgs) =
 //        (p.Invoke(x)) && x.Frame.Timestamp - !refts < thresh
     let timedevent (p:Predicate<LeapEventArgs>) refts thresh = new Predicate<LeapEventArgs>(fun x ->
         let f = x.Frame
-        printfn "-> %A - %A" (x.Frame.Timestamp) (!refts)
+//        printfn "-> %A - %A" (x.Frame.Timestamp) (!refts)
         (p.Invoke(x)) && x.Frame.Timestamp - !refts < thresh
     )
 
-    let closetimedhand = timedevent closehand ts_openedhand 100000L
-    let opentimedhand = timedevent openhand ts_closedhand 100000L
+    let closetimedhand = timedevent closehand ts_openedhand 150000L
+    let opentimedhand = timedevent openhand ts_closedhand 150000L
 
     // NON LO STO USANDO:
 //    let closetimedhand2 = new Predicate<LeapEventArgs>(fun x ->
@@ -125,7 +116,7 @@ module LeapTrayApplication
 
     let pointableCountIs n =
         new Predicate<LeapEventArgs>(fun x -> x.Frame.PointableList.Count = n)
-    (* GroundTerms definitions *)
+    (* Useless GroundTerms definitions *)
     let vedodito = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, p)
     let vedodito1 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 1)
     let vedodito2 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 2)
@@ -137,19 +128,32 @@ module LeapTrayApplication
     let nonvedodito2 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 2)
     let nonvedodito1 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 1)
     let nonvedodito0 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 0)
-    let muovoditodx = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveright)
+    let muovoditodx = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
     let muovoditoindietro = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveback)
     let muovoditoavanti = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveon)
+    (*  GroundTerms definitions *)
+    let openedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
+    let closedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closetimedhand)
+    let movefinger1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
+    let closehand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
+    let openedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, opentimedhand)
+    (*
+    let s1 = new Sequence<_,_>(openedhand1, closedhand1)
+    openedhand1.Gesture.Add(fun _ -> ts_openedhand := lastFrameInQueue.Timestamp)
+    closedhand1.Gesture.Add(fun _ -> ts_closedhand := lastFrameInQueue.Timestamp)
+    let net1 = s1.ToGestureNet(s)
+    s1.Gesture.Add(fun _ -> SendKeys.SendWait("^{ESC}"))
+    *)
+    let s2 = new Sequence<_,_>(closehand2, openedhand2)
+    closehand2.Gesture.Add(fun _ -> ts_closedhand := lastFrameInQueue.Timestamp)
+    openedhand2.Gesture.Add(fun _ -> ts_openedhand := lastFrameInQueue.Timestamp)
+    //let iter = new Iter<_,_>(muovoditodx)
+    let s22 = new Sequence<_,_>(s2, muovoditodx)
+    let net22 = s22.ToGestureNet(s)
+    s2.Gesture.Add(fun _ -> SendKeys.SendWait("^{ESC}"))
+    //iter.Gesture.Add(fun _ -> SendKeys.SendWait("martaaa"))
+    s22.Gesture.Add(fun _ -> SendKeys.SendWait("martaaa"))
     
-    let openedhand = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
-    let closedhand = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closetimedhand)
-
-    let s1 = new Sequence<_,_>(openedhand, closedhand)
-    let net = s1.ToGestureNet(s)
-    s1.Gesture.Add(fun _ ->
-        ts_closedhand := lastFrameInQueue.Timestamp
-        printfn "vabbè."
-    )
     (* Gesture definition 
     let s1 = new Sequence<_,_>(vedodito1, vedodito2)
     let s2 = new Sequence<_,_>(s1, vedodito3)
@@ -166,7 +170,6 @@ module LeapTrayApplication
     s7.Gesture.Add(fun _ -> SendKeys.SendWait("{ESC}"))
     let netdestocazzo2 = s7.ToGestureNet(s)
 *)
-
     (*let net1 = apromano.ToGestureNet(s)
     net1.Completion.Add(fun _ ->
                             SendKeys.SendWait("^{ESC}")

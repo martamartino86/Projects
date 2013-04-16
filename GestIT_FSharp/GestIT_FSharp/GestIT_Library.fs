@@ -90,12 +90,16 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
       clearHandler()
 
 [<AbstractClass>]
-type private BinaryOperatorNet (l:GestureNet, r:GestureNet) =
+type private OperatorNet () =
   inherit GestureNet()
 
   override this.AddToken(ts) =
     for n in this.Front do
       n.AddToken(ts)
+
+[<AbstractClass>]
+type private BinaryOperatorNet (l:GestureNet, r:GestureNet) =
+  inherit OperatorNet()
 
   override this.RemoveToken(ts) =
     l.RemoveToken(ts)
@@ -153,24 +157,16 @@ type Choice<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:GestureE
                         net.Completed(t))
     net
 
-
-(*
-type OrderIndependence<'T> when 'T :> System.Enum (t:GestureExpr<'T> array) =
-  inherit GestureExpr<'T>()
+type Iter<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (x:GestureExpr<'T,'U>) =
+  inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
-    let nets = t |> Array.map (fun e -> e.To
-    let lnet = l.ToInternalGestureNet(s)
-    let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
-                override this.AddToken(t) =
-                  lnet.AddToken(t)
-                  rnet.AddToken(t)
+    let subnet = x.ToInternalGestureNet(s)
+    let net = { new OperatorNet() with
+                override this.Front = subnet.Front
+                override this.RemoveToken(ts) = subnet.RemoveToken(ts)
                 } :> GestureNet
-    lnet.Completion.Add(fun t ->
-                        rnet.RemoveToken(t)
-                        net.Completed(t))
-    rnet.Completion.Add(fun t ->
-                        lnet.RemoveToken(t)
-                        net.Completed(t))
+    subnet.Completion.Add(fun t ->
+                          subnet.AddToken(t)
+                          x.Gestured()
+                          )
     net
-*)
