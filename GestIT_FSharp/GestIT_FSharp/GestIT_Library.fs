@@ -26,13 +26,10 @@ type GestureNet () =
   abstract member RemoveToken: Token seq -> unit
 
 
-type GestureEventArgs () =
-  inherit System.EventArgs()
-
 [<AbstractClass>]
 type GestureExpr<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   let gestureEvent = new Event<_>()
-  member this.Gestured() = gestureEvent.Trigger(this, new GestureEventArgs())
+  member this.Gestured(e) = gestureEvent.Trigger(this, e)
   [<CLIEvent>]
   member this.Gesture = gestureEvent.Publish
   abstract member ToNet: ISensor<'T,'U> -> GestureNet
