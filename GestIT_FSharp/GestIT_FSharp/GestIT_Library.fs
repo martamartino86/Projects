@@ -48,6 +48,7 @@ type Predicate<'U> = delegate of 'U -> bool
 
 type GroundTerm<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (f:'T, ?p:Predicate<'U>) =
   inherit GestureExpr<'T,'U>()
+  new(f,p) = GroundTerm<_,_>(f, new Predicate<_>(p))
   member this.Feature = f
   member this.Predicate = p
   override this.ToNet(s) = new GroundTermNet<_,_>(this, s) :> GestureNet
