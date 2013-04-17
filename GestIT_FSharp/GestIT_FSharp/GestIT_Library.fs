@@ -1,4 +1,4 @@
-﻿namespace GestIT
+namespace GestIT
 
 open System.Runtime.InteropServices
 
