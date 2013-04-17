@@ -91,27 +91,23 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
       clearHandler()
 
 [<AbstractClass>]
-type private OperatorNet () =
+type private OperatorNet ([<System.ParamArray>] subnets:GestureNet[]) =
   inherit GestureNet()
 
   override this.AddTokens(ts) =
     for n in this.Front do
       n.AddTokens(ts)
 
-[<AbstractClass>]
-type private BinaryOperatorNet (l:GestureNet, r:GestureNet) =
-  inherit OperatorNet()
-
   override this.RemoveTokens(ts) =
-    l.RemoveTokens(ts)
-    r.RemoveTokens(ts)
+    for n in subnets do
+      n.RemoveTokens(ts)
 
 type Sequence<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:GestureExpr<'T,'U>, r:GestureExpr<'T,'U>) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
     let lnet = l.ToInternalGestureNet(s)
     let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
+    let net = { new OperatorNet(lnet, rnet) with
                 override this.Front = lnet.Front
                 } :> GestureNet
     lnet.Completion.Add(rnet.AddTokens)
@@ -124,7 +120,7 @@ type Parallel<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:Gestur
   override this.ToNet(s) =
     let lnet = l.ToInternalGestureNet(s)
     let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
+    let net = { new OperatorNet(lnet, rnet) with
                 override this.Front = lnet.Front @ rnet.Front
               } :> GestureNet
     let semicompleted = new System.Collections.Generic.HashSet<Token>()
@@ -147,7 +143,7 @@ type Choice<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:GestureE
   override this.ToNet(s) =
     let lnet = l.ToInternalGestureNet(s)
     let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
+    let net = { new OperatorNet(lnet, rnet) with
                 override this.Front = lnet.Front @ rnet.Front
                 } :> GestureNet
     lnet.Completion.Add(fun ts ->
@@ -162,9 +158,8 @@ type Iter<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (x:GestureExp
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
     let subnet = x.ToInternalGestureNet(s)
-    let net = { new OperatorNet() with
+    let net = { new OperatorNet(subnet) with
                 override this.Front = subnet.Front
-                override this.RemoveTokens(ts) = subnet.RemoveTokens(ts)
                 } :> GestureNet
     subnet.Completion.Add(fun ts ->
                           subnet.AddTokens(ts)
