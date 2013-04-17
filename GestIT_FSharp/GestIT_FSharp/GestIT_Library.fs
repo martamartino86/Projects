@@ -1,4 +1,4 @@
-﻿namespace GestIT
+namespace GestIT
 
 open System.Runtime.InteropServices
 
@@ -17,14 +17,13 @@ type Token () =
   end
 
 [<AbstractClass>]
-type GestureNet () =
-  let completionEvent = new Event<Token seq>()
-  member this.Completed(t) = completionEvent.Trigger(t)
+type GestureNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
+  let completionEvent = new Event<SensorEventArgs<'T,'U> * seq<Token>>()
+  member this.Completed(e,t) = completionEvent.Trigger(e,t)
   member this.Completion = completionEvent.Publish
-  abstract member Front: GestureNet list
-  abstract member AddToken: Token seq -> unit
-  abstract member RemoveToken: Token seq -> unit
-
+  abstract member Front: GestureNet<'T,'U> list
+  abstract member AddTokens: Token seq -> unit
+  abstract member RemoveTokens: Token seq -> unit
 
 [<AbstractClass>]
 type GestureExpr<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
@@ -32,28 +31,29 @@ type GestureExpr<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   member this.Gestured(e) = gestureEvent.Trigger(this, e)
   [<CLIEvent>]
   member this.Gesture = gestureEvent.Publish
-  abstract member ToNet: ISensor<'T,'U> -> GestureNet
+  abstract member ToNet: ISensor<'T,'U> -> GestureNet<'T,'U>
   member this.ToInternalGestureNet(s) =
     let net = this.ToNet(s)
-    net.Completion.Add(fun t -> this.Gestured())
+    net.Completion.Add(fun (e,ts) -> this.Gestured(e))
     net
   member this.ToGestureNet(s) =
     let net = this.ToInternalGestureNet(s)
     for subn in net.Front do
-      subn.Completion.Add(fun _ -> net.AddToken([new Token()]))
-    net.AddToken([new Token()])
+      subn.Completion.Add(fun _ -> net.AddTokens([new Token()]))
+    net.AddTokens([new Token()])
     net
 
 type Predicate<'U> = delegate of 'U -> bool
 
 type GroundTerm<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (f:'T, ?p:Predicate<'U>) =
   inherit GestureExpr<'T,'U>()
+  new(f,p) = GroundTerm<_,_>(f, new Predicate<_>(p))
   member this.Feature = f
   member this.Predicate = p
-  override this.ToNet(s) = new GroundTermNet<_,_>(this, s) :> GestureNet
+  override this.ToNet(s) = new GroundTermNet<_,_>(this, s) :> GestureNet<_,_>
 
 and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (exp:GroundTerm<'T,'U>, sensor:ISensor<'T,'U>) as this =
-  inherit GestureNet()
+  inherit GestureNet<'T,'U>()
 
   let mutable tokens = new System.Collections.Generic.HashSet<Token>()
   let mutable handler:System.IDisposable = null
@@ -73,100 +73,94 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
         let oldtokens = tokens
         tokens <- new System.Collections.Generic.HashSet<Token>()
         clearHandler()
-        this.Completed(oldtokens)
+        this.Completed(event,oldtokens)
 
   override this.Front = [this]
 
-  override this.AddToken(ts) =
+  override this.AddTokens(ts) =
     for t in ts do
       tokens.Add(t) |> ignore
     if handler = null then
       handler <- sensor.SensorEvents.Subscribe(handle)
 
-  override this.RemoveToken(ts) =
+  override this.RemoveTokens(ts) =
     for t in ts do
       tokens.Remove(t) |> ignore
     if tokens.Count = 0 then
       clearHandler()
 
 [<AbstractClass>]
-type private OperatorNet () =
-  inherit GestureNet()
+type private OperatorNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subnets:GestureNet<'T,'U>[]) =
+  inherit GestureNet<'T,'U>()
 
-  override this.AddToken(ts) =
+  override this.AddTokens(ts) =
     for n in this.Front do
-      n.AddToken(ts)
+      n.AddTokens(ts)
 
-[<AbstractClass>]
-type private BinaryOperatorNet (l:GestureNet, r:GestureNet) =
-  inherit OperatorNet()
+  override this.RemoveTokens(ts) =
+    for n in subnets do
+      n.RemoveTokens(ts)
 
-  override this.RemoveToken(ts) =
-    l.RemoveToken(ts)
-    r.RemoveToken(ts)
-
-type Sequence<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:GestureExpr<'T,'U>, r:GestureExpr<'T,'U>) =
+type Sequence<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subexprs:GestureExpr<'T,'U>[]) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
-    let lnet = l.ToInternalGestureNet(s)
-    let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
-                override this.Front = lnet.Front
-                } :> GestureNet
-    lnet.Completion.Add(rnet.AddToken)
-    rnet.Completion.Add(net.Completed)
+    let subnets = subexprs |> Array.map (fun x -> x.ToInternalGestureNet(s))
+    let net = { new OperatorNet<_,_>(subnets) with
+                override this.Front = subnets.[0].Front
+                } :> GestureNet<_,_>
+    for i = 0 to subnets.Length - 2 do
+      subnets.[i].Completion.Add(fun (e,ts) -> subnets.[i+1].AddTokens(ts))
+    subnets.[subnets.Length-1].Completion.Add(net.Completed)
     net
 
 
-type Parallel<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:GestureExpr<'T,'U>, r:GestureExpr<'T,'U>) =
+type Parallel<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subexprs:GestureExpr<'T,'U>[]) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
-    let lnet = l.ToInternalGestureNet(s)
-    let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
-                override this.Front = lnet.Front @ rnet.Front
-              } :> GestureNet
-    let semicompleted = new System.Collections.Generic.HashSet<Token>()
-    let mycb ts =
+    let subnets = subexprs |> Array.map (fun x -> x.ToInternalGestureNet(s))
+    let net = { new OperatorNet<_,_>(subnets) with
+                override this.Front = subnets |> Seq.map (fun x -> x.Front) |> List.concat
+              } :> GestureNet<_,_>
+    let completed = new System.Collections.Generic.Dictionary<Token,int>()
+    let mycb (e,ts) =
       let mutable comp = []
       for t in ts do
-        if semicompleted.Contains(t) then
-          semicompleted.Remove(t) |> ignore
+        let found,count = completed.TryGetValue(t)
+        let count = 1 + (if found then count else 0)
+        if count = subnets.Length then
+          completed.Remove(t) |> ignore
           comp <- t::comp
         else
-          semicompleted.Add(t) |> ignore
+          completed.[t] <- count
       if comp <> [] then
-        net.Completed(comp)
-    lnet.Completion.Add(mycb)
-    rnet.Completion.Add(mycb)
+        net.Completed(e,comp)
+    for n in subnets do
+      n.Completion.Add(mycb)
     net
 
-type Choice<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (l:GestureExpr<'T,'U>, r:GestureExpr<'T,'U>) =
+type Choice<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subexprs:GestureExpr<'T,'U>[]) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
-    let lnet = l.ToInternalGestureNet(s)
-    let rnet = r.ToInternalGestureNet(s)
-    let net = { new BinaryOperatorNet(lnet, rnet) with
-                override this.Front = lnet.Front @ rnet.Front
-                } :> GestureNet
-    lnet.Completion.Add(fun t ->
-                        rnet.RemoveToken(t)
-                        net.Completed(t))
-    rnet.Completion.Add(fun t ->
-                        lnet.RemoveToken(t)
-                        net.Completed(t))
+    let subnets = subexprs |> Array.map (fun x -> x.ToInternalGestureNet(s))
+    let net = { new OperatorNet<_,_>(subnets) with
+                override this.Front = subnets |> Seq.map (fun x -> x.Front) |> List.concat
+                } :> GestureNet<_,_>
+    for n in subnets do
+      n.Completion.Add(fun (e,ts) ->
+                       for othern in subnets do
+                         if othern <> n then
+                           othern.RemoveTokens(ts)
+                       net.Completed(e,ts))
     net
 
 type Iter<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (x:GestureExpr<'T,'U>) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
     let subnet = x.ToInternalGestureNet(s)
-    let net = { new OperatorNet() with
+    let net = { new OperatorNet<_,_>(subnet) with
                 override this.Front = subnet.Front
-                override this.RemoveToken(ts) = subnet.RemoveToken(ts)
-                } :> GestureNet
-    subnet.Completion.Add(fun t ->
-                          subnet.AddToken(t)
-                          x.Gestured()
-                          )
+                } :> GestureNet<_,_>
+    subnet.Completion.Add(fun (e,ts) ->
+                          subnet.AddTokens(ts)
+                          this.Gestured(e))
     net
