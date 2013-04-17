@@ -102,6 +102,7 @@ module LeapTrayApplication
         let f = x.Frame
         let id = x.Id
         if f.PointableList.Count <> 2 then
+            printfn "troppe o troppe poche dita"
             false
         else
             let finger =
@@ -109,12 +110,14 @@ module LeapTrayApplication
                 |> Seq.maxBy (fun y -> y.Length)
             let angle_x = finger.Direction.AngleTo(vectorX) * (180.f / (float32)System.Math.PI)
             let angle_y = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
-            (50.f < angle_x) && (angle_x > 70.f) && (80.f < angle_y) && (angle_y > 100.f)
+            printfn "RIGHT: aX %A aY %A -> %b %b" angle_x angle_y (70.f < angle_x) ((80.f < angle_y) && (angle_y < 110.f))
+            (70.f > angle_x) && ((80.f < angle_y) && (angle_y < 110.f))
 
     let movefingerleft (x:LeapEventArgs) =
         let f = x.Frame
         let id = x.Id
         if f.PointableList.Count <> 2 then
+            printfn "troppe o troppe poche dita"
             false
         else
             let finger =
@@ -122,7 +125,8 @@ module LeapTrayApplication
                 |> Seq.maxBy (fun y -> y.Length)
             let angle_x = finger.Direction.AngleTo(vectorX) * (180.f / (float32)System.Math.PI)
             let angle_y = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
-            (105.f < angle_x) && (angle_x > 125.f) && (80.f < angle_y) && (angle_y > 100.f)
+            printfn "LEFT: aX %A aY %A -> %b %b" angle_x angle_y (angle_x < 105.f) ((80.f < angle_y) && (angle_y < 110.f))
+            (angle_x > 105.f) && ((80.f < angle_y) && (angle_y < 110.f))
 
     let movefingerup1 (x:LeapEventArgs) =
         let f = x.Frame
@@ -270,10 +274,10 @@ module LeapTrayApplication
     let s222 = new Choice<_,_>(s22, pushedhanddown)
     let net222 = s222.ToGestureNet(s)
     s2.Gesture.Add(fun _ -> printfn "apri menu"; SendKeys.SendWait("^{ESC}"))
-    iterr.Gesture.Add(fun _ -> printfn "vai a dx";  SendKeys.SendWait("{RIGHT 1}"))
-    iterl.Gesture.Add(fun _ -> printfn "vai a sx";  SendKeys.SendWait("{LEFT 1}"))
-    iteru.Gesture.Add(fun _ -> printfn "vai su";  SendKeys.SendWait("{UP 1}"))
-    iterd.Gesture.Add(fun _ -> printfn "vai giù";  SendKeys.SendWait("{DOWN 1}"))
+    iterr.Gesture.Add(fun _ -> printfn "*********************************************************RIGHT";  SendKeys.SendWait("{RIGHT 1}"))
+    iterl.Gesture.Add(fun _ -> printfn "*********************************************************LEFT";  SendKeys.SendWait("{LEFT 1}"))
+    iteru.Gesture.Add(fun _ -> printfn "UP";  SendKeys.SendWait("{UP 1}"))
+    iterd.Gesture.Add(fun _ -> printfn "DOWN";  SendKeys.SendWait("{DOWN 1}"))
     s222.Gesture.Add(fun (sender,e) -> printfn "select"; 
                                        lastEnter <- e.Event.Frame.Timestamp
                                        SendKeys.SendWait("{ENTER}")
