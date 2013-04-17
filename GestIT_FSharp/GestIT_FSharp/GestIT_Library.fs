@@ -167,6 +167,6 @@ type Iter<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (x:GestureExp
                 } :> GestureNet
     subnet.Completion.Add(fun t ->
                           subnet.AddToken(t)
-                          x.Gestured()
+                          this.Gestured()
                           )
     net
