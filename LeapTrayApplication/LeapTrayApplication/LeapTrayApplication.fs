@@ -16,12 +16,12 @@ module LeapTrayApplication
     (* Timestamps *)
     let ts_openedhand = ref(-1L : TimeStamp)
     let ts_closedhand = ref(-1L : TimeStamp)
+    let mutable lastEnter:TimeStamp = -1L
 
     (* Predicates *)
     let speed (x:float32) (y:float32) = x / y
     let p = new Predicate<LeapEventArgs>(fun x -> true)
     let movefingerright = new Predicate<LeapEventArgs>(fun x ->
-//        printfn "Evaluating predicate moveright..."
         let id = x.Id
         let exists =
             if frameQueue |> Seq.exists (fun f -> not (f.PointableList.ContainsKey(id))) then
@@ -38,11 +38,88 @@ module LeapTrayApplication
                         let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
                         let v_m = (delta_s / delta_t) * 1000000.f
                         (p2.x >= p1.x) && (v_m >= 0.4f)
-                        )
+                    )
                     |> Seq.length
                 let thresh = int(float(frameQueue.Count) * 0.9)
                 l > thresh
         exists && (lastFrameInQueue.PointableList.[id].Position.x - frameQueue.Peek().PointableList.[id].Position.x > 50.f)
+    )
+    let movehandright = new Predicate<LeapEventArgs>(fun x ->
+        let f = x.Frame
+        let id = x.Id
+        let exists =
+            if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) then
+                false
+            else
+                let l =
+                    frameQueue
+                    |> Seq.pairwise
+                    |> Seq.filter (fun (f1,f2) ->
+                        let p1 = f1.HandList.[id].Position
+                        let p2 = f2.HandList.[id].Position
+                        let delta_s = System.Math.Abs(p2.x - p1.x)
+                        let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
+                        let v_m = (delta_s / delta_t) * 1000000.f
+                        (p2.x >= p1.x) && (v_m >= 0.4f)
+                    )
+                    |> Seq.length
+                let thresh = int(float(frameQueue.Count) * 0.7)
+                l > thresh
+        exists
+    )
+    let movehandleft = new Predicate<LeapEventArgs>(fun x ->
+        let f = x.Frame
+        let id = x.Id
+        let exists =
+            if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) then
+                false
+            else
+                let l =
+                    frameQueue
+                    |> Seq.pairwise
+                    |> Seq.filter (fun (f1,f2) ->
+                        let p1 = f1.HandList.[id].Position
+                        let p2 = f2.HandList.[id].Position
+                        let delta_s = System.Math.Abs(p2.x - p1.x)
+                        let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
+                        let v_m = (delta_s / delta_t) * 1000000.f
+                        (p2.x <= p1.x) && (v_m >= 0.4f)
+                    )
+                    |> Seq.length
+                let thresh = int(float(frameQueue.Count) * 0.7)
+                l > thresh
+        exists
+    )
+    let pushhanddown = new Predicate<LeapEventArgs>(fun x ->
+      let thresh = 50.f
+      let f = x.Frame
+      if lastEnter >= f.Timestamp - 1000000L then
+        false
+      else
+        let id = x.Id
+        let o = x.Frame.HandList.[id].Position
+        let coda =
+            frameQueue
+            |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 100000L)
+        //printfn "rimangono %d frame" (coda |> Seq.length)
+        if coda |> Seq.isEmpty then
+            false
+        else
+            let maxY =
+                coda
+                |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
+//            printfn "maxY: %A   currentY: %A" maxY.HandList.[id].Position.y o.y
+            if maxY.HandList.[id].Position.y - o.y > 100.f then
+                coda
+                |> Seq.filter (fun z -> z.Timestamp >= maxY.Timestamp)
+                |> Seq.forall (fun z ->
+                                let v = z.HandList.[id].Position
+                                let dx = v.x - o.x
+                                let dz = v.z - o.z
+                                (dx*dx + dz*dz) < thresh * thresh
+                                )
+            else
+                false
     )
 
     let moveon = new Predicate<LeapEventArgs>(fun x ->
@@ -101,18 +178,11 @@ module LeapTrayApplication
 //        (p.Invoke(x)) && x.Frame.Timestamp - !refts < thresh
     let timedevent (p:Predicate<LeapEventArgs>) refts thresh = new Predicate<LeapEventArgs>(fun x ->
         let f = x.Frame
-//        printfn "-> %A - %A" (x.Frame.Timestamp) (!refts)
         (p.Invoke(x)) && x.Frame.Timestamp - !refts < thresh
     )
 
     let closetimedhand = timedevent closehand ts_openedhand 150000L
     let opentimedhand = timedevent openhand ts_closedhand 150000L
-
-    // NON LO STO USANDO:
-//    let closetimedhand2 = new Predicate<LeapEventArgs>(fun x ->
-//        let f = x.Frame
-//        f.HandList.Count = 1 && f.PointableList.Count <= 1 && f.Timestamp - !ts_openedhand < 100000L
-//        )
 
     let pointableCountIs n =
         new Predicate<LeapEventArgs>(fun x -> x.Frame.PointableList.Count = n)
@@ -128,31 +198,39 @@ module LeapTrayApplication
     let nonvedodito2 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 2)
     let nonvedodito1 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 1)
     let nonvedodito0 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 0)
-    let muovoditodx = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
+    let movefinger1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
     let muovoditoindietro = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveback)
     let muovoditoavanti = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, moveon)
     (*  GroundTerms definitions *)
     let openedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
     let closedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closetimedhand)
-    let movefinger1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
-    let closehand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
+    let closedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
     let openedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, opentimedhand)
-    (*
+    let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandright)
+    let movedhandleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandleft)
+    let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
+    
     let s1 = new Sequence<_,_>(openedhand1, closedhand1)
     openedhand1.Gesture.Add(fun _ -> ts_openedhand := lastFrameInQueue.Timestamp)
     closedhand1.Gesture.Add(fun _ -> ts_closedhand := lastFrameInQueue.Timestamp)
     let net1 = s1.ToGestureNet(s)
     s1.Gesture.Add(fun _ -> SendKeys.SendWait("^{ESC}"))
-    *)
-    let s2 = new Sequence<_,_>(closehand2, openedhand2)
-    closehand2.Gesture.Add(fun _ -> ts_closedhand := lastFrameInQueue.Timestamp)
+    
+    let s2 = new Sequence<_,_>(closedhand2, openedhand2)
+    closedhand2.Gesture.Add(fun _ -> ts_closedhand := lastFrameInQueue.Timestamp)
     openedhand2.Gesture.Add(fun _ -> ts_openedhand := lastFrameInQueue.Timestamp)
-    //let iter = new Iter<_,_>(muovoditodx)
-    let s22 = new Sequence<_,_>(s2, muovoditodx)
-    let net22 = s22.ToGestureNet(s)
+    let iterr = new Iter<_,_>(movedhandright)
+    let iterl = new Iter<_,_>(movedhandleft)
+    let ch = new Choice<_,_>(iterr, iterl)
+    let s22 = new Sequence<_,_>(s2, ch)
+    let s222 = new Choice<_,_>(s22, pushedhanddown)
+    let net222 = s222.ToGestureNet(s)
     s2.Gesture.Add(fun _ -> SendKeys.SendWait("^{ESC}"))
-    //iter.Gesture.Add(fun _ -> SendKeys.SendWait("martaaa"))
-    s22.Gesture.Add(fun _ -> SendKeys.SendWait("martaaa"))
+    iterr.Gesture.Add(fun _ -> SendKeys.SendWait("{RIGHT 1}"))
+    iterl.Gesture.Add(fun _ -> SendKeys.SendWait("{LEFT 1}"))
+    s222.Gesture.Add(fun (_,x) -> lastEnter <- lastFrameInQueue.Timestamp
+                                  SendKeys.SendWait("{ENTER}")
+                    )
     
     (* Gesture definition 
     let s1 = new Sequence<_,_>(vedodito1, vedodito2)
