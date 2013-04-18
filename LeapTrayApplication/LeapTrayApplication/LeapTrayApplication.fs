@@ -14,11 +14,17 @@ module LeapTrayApplication
     let mutable lastFrameInQueue = new ClonableFrame() // it represents the last enqueued frame
     let vectorX = new Leap.Vector((float32)1, (float32)0, (float32)0)
     let vectorY = new Leap.Vector((float32)0, (float32)(-1),(float32) 0)
+    let vectorZ = new Leap.Vector((float32)0, (float32)0, (float32)(-1))
 
     (* Timestamps *)
     let ts_openedhand = ref(-1L : TimeStamp)
     let ts_closedhand = ref(-1L : TimeStamp)
     let mutable lastEnter:TimeStamp = -1L
+    let mutable lastFingerLeft:TimeStamp = -1L
+    let mutable lastFingerRight:TimeStamp = -1L
+    let mutable lastFingerUp:TimeStamp = -1L
+    let mutable lastFingerDown:TimeStamp = -1L
+
 
     (* Predicates *)
     let speed (x:float32) (y:float32) = x / y
@@ -101,8 +107,8 @@ module LeapTrayApplication
     let movefingerright (x:LeapEventArgs) =
         let f = x.Frame
         let id = x.Id
-        if f.PointableList.Count <> 2 then
-            printfn "troppe o troppe poche dita"
+        if f.PointableList.Count > 2 || f.PointableList.Count = 0 || f.Timestamp - lastFingerRight < 300000L then
+            //printfn "ptb %d - %A" (f.PointableList.Count) (f.Timestamp - lastFingerRight < 1000000L)
             false
         else
             let finger =
@@ -110,14 +116,15 @@ module LeapTrayApplication
                 |> Seq.maxBy (fun y -> y.Length)
             let angle_x = finger.Direction.AngleTo(vectorX) * (180.f / (float32)System.Math.PI)
             let angle_y = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
-            printfn "RIGHT: aX %A aY %A -> %b %b" angle_x angle_y (70.f < angle_x) ((80.f < angle_y) && (angle_y < 110.f))
-            (70.f > angle_x) && ((80.f < angle_y) && (angle_y < 110.f))
+            let angle_z = finger.Direction.AngleTo(vectorZ) * (180.f / (float32)System.Math.PI)
+            //print0fn "RIGHT: aX %A aY %A -> %b %b" angle_x angle_y (70.f < angle_x) ((80.f < angle_y) && (angle_y < 110.f))
+            (70.f >= angle_x) && ((85.f <= angle_y) && (angle_y <= 105.f)) && (angle_z >= 10.f)
 
     let movefingerleft (x:LeapEventArgs) =
         let f = x.Frame
         let id = x.Id
-        if f.PointableList.Count <> 2 then
-            printfn "troppe o troppe poche dita"
+        if f.PointableList.Count > 2 || f.PointableList.Count = 0 || f.Timestamp - lastFingerLeft < 300000L then
+            //printfn "ptb %d - %A" (f.PointableList.Count) (f.Timestamp - lastFingerLeft < 1000000L)
             false
         else
             let finger =
@@ -125,32 +132,41 @@ module LeapTrayApplication
                 |> Seq.maxBy (fun y -> y.Length)
             let angle_x = finger.Direction.AngleTo(vectorX) * (180.f / (float32)System.Math.PI)
             let angle_y = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
+            let angle_z = finger.Direction.AngleTo(vectorZ) * (180.f / (float32)System.Math.PI)
             printfn "LEFT: aX %A aY %A -> %b %b" angle_x angle_y (angle_x < 105.f) ((80.f < angle_y) && (angle_y < 110.f))
-            (angle_x > 105.f) && ((80.f < angle_y) && (angle_y < 110.f))
+            (angle_x > 105.f) && ((85.f < angle_y) && (angle_y < 105.f)) && (angle_z > 10.f)
 
-    let movefingerup1 (x:LeapEventArgs) =
+    let movefingerup (x:LeapEventArgs) =
         let f = x.Frame
         let id = x.Id
-        if f.PointableList.Count <> 2 then
+        if f.PointableList.Count > 2 || f.PointableList.Count = 0 || f.Timestamp - lastFingerUp < 300000L then
+            //printfn "ptb %d - %A" (f.PointableList.Count) (f.Timestamp - lastFingerUp < 1000000L)
             false
         else
             let finger =
                 f.PointableList.Values
                 |> Seq.maxBy (fun y -> y.Length)
-            let angle = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
-            (105.f < angle) && (angle > 125.f)
+            let angle_x = finger.Direction.AngleTo(vectorX) * (180.f / (float32)System.Math.PI)
+            let angle_y = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
+            let angle_z = finger.Direction.AngleTo(vectorZ) * (180.f / (float32)System.Math.PI)
+            printfn "UP: aX %A aY %A -> %b %b" angle_x angle_y (105.f < angle_y) ((80.f < angle_x) && (angle_x < 110.f))
+            (angle_y > 105.f) && ((85.f < angle_x) && (angle_x < 105.f)) && (angle_z > 10.f)
 
-    let movefingerdown1 (x:LeapEventArgs) =
+    let movefingerdown (x:LeapEventArgs) =
         let f = x.Frame
         let id = x.Id
-        if f.PointableList.Count <> 2 then
+        if f.PointableList.Count > 2 || f.PointableList.Count = 0 || f.Timestamp - lastFingerDown < 300000L then
+            //printfn "ptb %d - %A" (f.PointableList.Count) (f.Timestamp - lastFingerDown < 1000000L)
             false
         else
             let finger =
                 f.PointableList.Values
                 |> Seq.maxBy (fun y -> y.Length)
-            let angle = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
-            (50.f < angle) && (angle > 70.f)
+            let angle_x = finger.Direction.AngleTo(vectorX) * (180.f / (float32)System.Math.PI)
+            let angle_y = finger.Direction.AngleTo(vectorY) * (180.f / (float32)System.Math.PI)
+            let angle_z = finger.Direction.AngleTo(vectorZ) * (180.f / (float32)System.Math.PI)
+
+            (angle_y < 70.f) && ((angle_x > 85.f) && (angle_x < 105.f)) && (angle_z > 10.f)
 
     (*
     let moveon = new Predicate<LeapEventArgs>(fun x ->
@@ -246,8 +262,6 @@ module LeapTrayApplication
     let closedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
     let openedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, opentimedhand)
     
-    let movefingerup (x:LeapEventArgs) = false
-    let movefingerdown (x:LeapEventArgs) = false
     let movedfingerright = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerright)
     let movedfingerleft = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerleft)
     let movedfingerup = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerup)
@@ -273,11 +287,19 @@ module LeapTrayApplication
     let s22 = new Sequence<_,_>(s2, ch1)
     let s222 = new Choice<_,_>(s22, pushedhanddown)
     let net222 = s222.ToGestureNet(s)
-    s2.Gesture.Add(fun _ -> printfn "apri menu"; SendKeys.SendWait("^{ESC}"))
-    iterr.Gesture.Add(fun _ -> printfn "*********************************************************RIGHT";  SendKeys.SendWait("{RIGHT 1}"))
-    iterl.Gesture.Add(fun _ -> printfn "*********************************************************LEFT";  SendKeys.SendWait("{LEFT 1}"))
-    iteru.Gesture.Add(fun _ -> printfn "UP";  SendKeys.SendWait("{UP 1}"))
-    iterd.Gesture.Add(fun _ -> printfn "DOWN";  SendKeys.SendWait("{DOWN 1}"))
+    s2.Gesture.Add(fun (sender,e) -> printfn "apri menu"; SendKeys.SendWait("^{ESC}"))
+    iterr.Gesture.Add(fun (sender,e) -> printfn "***************RIGHT"
+                                        lastFingerRight <- e.Event.Frame.Timestamp;
+                                        SendKeys.SendWait("{RIGHT 1}"))
+    iterl.Gesture.Add(fun (sender,e) -> printfn "***************LEFT";
+                                        lastFingerLeft <- e.Event.Frame.Timestamp;
+                                        SendKeys.SendWait("{LEFT 1}"))
+    iteru.Gesture.Add(fun (sender,e) -> printfn "***************UP";
+                                        lastFingerUp <- e.Event.Frame.Timestamp;
+                                        SendKeys.SendWait("{UP 1}"))
+    iterd.Gesture.Add(fun (sender,e) -> printfn "***************DOWN";
+                                        lastFingerDown <- e.Event.Frame.Timestamp;
+                                        SendKeys.SendWait("{DOWN 1}"))
     s222.Gesture.Add(fun (sender,e) -> printfn "select"; 
                                        lastEnter <- e.Event.Frame.Timestamp
                                        SendKeys.SendWait("{ENTER}")
