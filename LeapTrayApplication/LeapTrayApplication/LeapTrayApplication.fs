@@ -32,6 +32,7 @@ module LeapTrayApplication
         let threshpointfinger:TimeStamp = 300000L
         let mutable minX = new ClonableFrame()
         let mutable maxY = new ClonableFrame()
+        let mutable nVariations = 0
 
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
@@ -120,16 +121,19 @@ module LeapTrayApplication
                                                           Debug.Flush()
                                                           p1.x < p2.x && p1.y > p2.y
                             )
+                        let changesign = ref 0
                         let passedbyorigin =
                             c1
-                            |> Seq.exists (fun v -> let xx = v.HandList.[id].Position
-                                                    xx.x >= -5.f && xx.x <= 5.f
-                            )
-                        //Debug.WriteLine("ERGO: {0} {1}", c2, passedbyorigin)
-                        c2 && passedbyorigin
+                            |> Seq.iter (fun u -> if u.HandList.[id].Position.x > 0.f then changesign := 1 )
+//                        let passedbyorigin =
+//                            c1
+//                            |> Seq.exists (fun v -> let xx = v.HandList.[id].Position
+//                                                    xx.x >= -5.f && xx.x <= 5.f
+//                            )
+                        Debug.WriteLine("{0}", !changesign)
+                        c2 && !changesign = 1
 
         let movefistupright (x:LeapEventArgs) =
-            let thresh = 50.f
             let f = x.Frame
             let id = x.Id
             if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
@@ -138,7 +142,7 @@ module LeapTrayApplication
             else
                 let coda =
                     frameQueue
-                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 100000L)
                 if not (minX.HandList.ContainsKey(id)) || f.HandList.[id].Position.x < minX.HandList.[id].Position.x then
                     Debug.WriteLine("nuovo min x: {0}", f.HandList.[id].Position.x)
                     minX <- f
@@ -151,14 +155,67 @@ module LeapTrayApplication
                         maxY <- 
                             coda
                             |> Seq.maxBy (fun y -> y.HandList.[id].Position.y)
-                        coda
-                        |> Seq.filter (fun z -> z.Timestamp >= minX.Timestamp)
-                        |> Seq.pairwise
-                        |> Seq.forall (fun (u1,u2) -> let p1 = u1.HandList.[id].Position
-                                                      let p2 = u2.HandList.[id].Position
-                                                      //Debug.WriteLine ("{0} {1} - {2}", p1, p2, (p1.x > p2.x && p1.y < p2.y))
-                                                      p1.x < p2.x && p1.y < p2.y
-                        )
+                        let c =
+                            coda
+                            |> Seq.filter (fun z -> z.Timestamp >= minX.Timestamp)
+                            |> Seq.pairwise
+                            |> Seq.forall (fun (u1,u2) -> let p1 = u1.HandList.[id].Position
+                                                          let p2 = u2.HandList.[id].Position
+                                                          p1.x < p2.x && p1.y < p2.y
+                            )
+                        if c then
+                            maxY <- f
+                            nVariations <- 1
+                            true
+                        else
+                            false
+
+        let movefistdownleft (x:LeapEventArgs) =
+            let f = x.Frame
+            let id = x.Id
+            if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
+                Debug.WriteLine("{0} dita, {1} mani", f.PointableList.Count, f.HandList.Count)
+                false
+            else
+                let coda =
+                    frameQueue
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
+                if not (maxY.HandList.ContainsKey(id)) || f.HandList.[id].Position.y > maxY.HandList.[id].Position.y then
+                    Debug.WriteLine("nuovo max y: {0}", f.HandList.[id].Position.y)
+                    maxY <- f
+                    false
+                else
+                    if coda |> Seq.isEmpty then
+                        Debug.WriteLine("coda empty")
+                        false
+                    else
+                        let maxYtmp =
+                            coda
+                            |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
+                        let c1 =
+                            coda
+                            |> Seq.filter (fun q -> q.Timestamp >= maxYtmp.Timestamp)
+                        if Seq.length c1 < 2 then
+                            false
+                        //Debug.WriteLine("# frame: {0}", Seq.length c1)
+                        else
+                            let c2 =
+                                c1
+                                |> Seq.pairwise
+                                |> Seq.forall (fun (u1,u2) -> 
+                                                              let p1 = u1.HandList.[id].Position
+                                                              let p2 = u2.HandList.[id].Position
+                                                              Debug.WriteLine ("{0} {1} - {2}", p1, p2, (p1.x > p2.x && p1.y > p2.y))
+                                                              p1.x > p2.x && p1.y > p2.y
+                                )
+                       
+                            let passedbyorigin =
+                                coda
+                                |> Seq.exists (fun v -> let xx = v.HandList.[id].Position
+                                                        Debug.WriteLine("origine? {0}", xx.x)
+                                                        xx.x >= -5.f && xx.x <= 5.f
+                                )
+                            c2 && passedbyorigin
 
         let pushhanddown (x:LeapEventArgs) =
             let thresh = 50.f
@@ -292,7 +349,8 @@ module LeapTrayApplication
         
         let movedfistdownright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistdownright)
         let movedfistupright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistupright)
-        let s1 = new Sequence<_,_>(movedfistdownright, movedfistupright)
+        let movedfistdownleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistdownleft)
+        let s1 = new Sequence<_,_>(movedfistdownright, movedfistupright, movedfistdownleft)
         let net = s1.ToGestureNet(s)
         (*
         let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
@@ -351,9 +409,9 @@ module LeapTrayApplication
                     UpdateInformations(f, e.FeatureType, id)
                     openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             )
-            movedfistdownright.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED DOWN ***")
-            movedfistupright.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED UP ***")
-
+            movedfistdownright.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED DOWN 1 ***")
+            movedfistupright.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED UP 1 ***")
+            movedfistdownleft.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED DOWN 2 ***")
             (*
             s1.Gesture.Add(fun _ -> printfn "chiudi menu"; SendKeys.SendWait("{ESC}"))
             closedhand2.Gesture.Add(fun (sender,e) -> ts_closedhand := e.Event.Frame.Timestamp)
