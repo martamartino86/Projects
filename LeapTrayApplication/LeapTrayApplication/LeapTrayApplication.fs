@@ -4,6 +4,7 @@ module LeapTrayApplication
     open System.Windows.Forms
     open System.Drawing
     open System.Collections.Generic
+    open System.Diagnostics
     open GestIT
     open ClonableLeapFrame
     open LeapDriver
@@ -29,6 +30,9 @@ module LeapTrayApplication
         let mutable lastFingerUp:TimeStamp = -1L
         let mutable lastFingerDown:TimeStamp = -1L
         let threshpointfinger:TimeStamp = 300000L
+        let mutable minX = new ClonableFrame()
+        let mutable maxY = new ClonableFrame()
+
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
         let p = new Predicate<LeapEventArgs>(fun x -> true)
@@ -77,11 +81,89 @@ module LeapTrayApplication
                     let thresh = int(float(frameQueue.Count) * 0.7)
                     l > thresh
             exists
-    
+
+        let movefistdownright (x:LeapEventArgs) =
+            let f = x.Frame
+            let id = x.Id
+            if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
+                Debug.WriteLine("{0} dita, {1} mani", f.PointableList.Count, f.HandList.Count)
+                false
+            else
+                // studio il movimento su quasi tutta la coda: in 1/10 di secondo devo fare il movimento "scendi col pugno"
+                let coda =
+                    frameQueue
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
+                //Debug.WriteLine("ci sono {0} frame in coda", Seq.length coda)
+                if coda |> Seq.isEmpty then
+                    Debug.WriteLine("coda empty")
+                    false
+                else
+                    let maxY =
+                        coda
+                        |> Seq.maxBy (fun y -> y.HandList.[id].Position.y)
+                    minX <-
+                        coda
+                        |> Seq.minBy (fun q -> q.HandList.[id].Position.x)
+                    let c1 =
+                        coda
+                        |> Seq.filter (fun z -> z.Timestamp >= maxY.Timestamp)
+                    if Seq.length c1 < 2 then
+                        false
+                    else
+                        let c2 =
+                            c1
+                            |> Seq.pairwise
+                            |> Seq.forall (fun (u1,u2) ->
+                                                          let p1 = u1.HandList.[id].Position
+                                                          let p2 = u2.HandList.[id].Position
+                                                          //Debug.WriteLine ("Y1: {0} {2} Y2: {1} {3}", p1.y, p2.y, u1.Timestamp, u2.Timestamp)
+                                                          Debug.Flush()
+                                                          p1.x < p2.x && p1.y > p2.y
+                            )
+                        let passedbyorigin =
+                            c1
+                            |> Seq.exists (fun v -> let xx = v.HandList.[id].Position
+                                                    xx.x >= -5.f && xx.x <= 5.f
+                            )
+                        //Debug.WriteLine("ERGO: {0} {1}", c2, passedbyorigin)
+                        c2 && passedbyorigin
+
+        let movefistupright (x:LeapEventArgs) =
+            let thresh = 50.f
+            let f = x.Frame
+            let id = x.Id
+            if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
+                Debug.WriteLine("{0} dita, {1} mani", f.PointableList.Count, f.HandList.Count)
+                false
+            else
+                let coda =
+                    frameQueue
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
+                if not (minX.HandList.ContainsKey(id)) || f.HandList.[id].Position.x < minX.HandList.[id].Position.x then
+                    Debug.WriteLine("nuovo min x: {0}", f.HandList.[id].Position.x)
+                    minX <- f
+                    false
+                else
+                    if coda |> Seq.isEmpty then
+                        Debug.WriteLine("coda empty")
+                        false
+                    else
+                        maxY <- 
+                            coda
+                            |> Seq.maxBy (fun y -> y.HandList.[id].Position.y)
+                        coda
+                        |> Seq.filter (fun z -> z.Timestamp >= minX.Timestamp)
+                        |> Seq.pairwise
+                        |> Seq.forall (fun (u1,u2) -> let p1 = u1.HandList.[id].Position
+                                                      let p2 = u2.HandList.[id].Position
+                                                      //Debug.WriteLine ("{0} {1} - {2}", p1, p2, (p1.x > p2.x && p1.y < p2.y))
+                                                      p1.x < p2.x && p1.y < p2.y
+                        )
+
         let pushhanddown (x:LeapEventArgs) =
             let thresh = 50.f
             let f = x.Frame
-            if (lastEnter >= f.Timestamp - 1000000L) || (x.Frame.PointableList.Count < 4) then
+            if (lastEnter >= f.Timestamp - 1000000L) || (f.PointableList.Count < 4) then
                 false
             else
                 let id = x.Id
@@ -138,20 +220,7 @@ module LeapTrayApplication
                 let finger =
                     f.PointableList.Values
                     |> Seq.maxBy (fun y -> y.Length)
-                finger.Position.y >= 250.f
-
-
-        let movefingerupgioco (x:LeapEventArgs) =
-            let f = x.Frame
-            let id = x.Id
-            if f.PointableList.Count > 2 || f.PointableList.Count = 0 then
-                false
-            else
-                let finger =
-                    f.PointableList.Values
-                    |> Seq.maxBy (fun y -> y.Length)
-                finger.Position.y >= 250.f
-
+                finger.Position.y >= 210.f
 
         let movefingerdown (x:LeapEventArgs) =
             let f = x.Frame
@@ -219,9 +288,13 @@ module LeapTrayApplication
         let movedfingerleft = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerleft)
         let movedfingerup = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerup)
         let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerdown)
-        let movefingergioco = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerupgioco)
         let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
-
+        
+        let movedfistdownright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistdownright)
+        let movedfistupright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistupright)
+        let s1 = new Sequence<_,_>(movedfistdownright, movedfistupright)
+        let net = s1.ToGestureNet(s)
+        (*
         let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
         let net1 = s1.ToGestureNet(s)
 
@@ -235,9 +308,7 @@ module LeapTrayApplication
         let s22 = new Sequence<_,_>(s2, ch1)
         let s222 = new Choice<_,_>(s22, pushedhanddown)
         let net222 = s222.ToGestureNet(s)
-        let itergioco = new Iter<_,_>(movefingergioco)
-        let netgioco = itergioco.ToGestureNet(s)
-
+        *)
         do
             trayMenu <- new ContextMenu()
             trayIcon <- new NotifyIcon()
@@ -258,10 +329,9 @@ module LeapTrayApplication
                 | LeapFeatureTypes.NotActiveFinger | LeapFeatureTypes.NotActiveTool -> lastFrameInQueue.PointableList.Remove(id) |> ignore
                 | _ -> ()
 
-
         override x.OnLoad(e:System.EventArgs) =
             x.Visible <- false
-            trayIcon.Visible <- true; // Hide form window.
+            trayIcon.Visible <- true
             x.ShowInTaskbar <- false; // Remove from taskbar.
             (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
                 (* Removing too old frames *)
@@ -281,6 +351,10 @@ module LeapTrayApplication
                     UpdateInformations(f, e.FeatureType, id)
                     openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             )
+            movedfistdownright.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED DOWN ***")
+            movedfistupright.Gesture.Add(fun _ -> Debug.WriteLine "*** RECOGNIZED UP ***")
+
+            (*
             s1.Gesture.Add(fun _ -> printfn "chiudi menu"; SendKeys.SendWait("{ESC}"))
             closedhand2.Gesture.Add(fun (sender,e) -> ts_closedhand := e.Event.Frame.Timestamp)
             s2.Gesture.Add(fun (sender,e) -> printfn "apri menu"; SendKeys.SendWait("^{ESC}"))
@@ -300,16 +374,22 @@ module LeapTrayApplication
             s222.Gesture.Add(fun (sender,e) -> printfn "select"; 
                                                lastEnter <- e.Event.Frame.Timestamp
                                                SendKeys.SendWait("{ENTER}"))
-            itergioco.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("{UP}"))
-            trayIcon.DoubleClick.Add(fun _ -> 
-                                              x.Visible <- true
-                                              x.Invalidate()
+            *)
+            trayIcon.DoubleClick.Add(fun _ ->
+                                            if x.Visible = true then
+                                                x.Visible <- false
+                                            else
+                                                x.Visible <- true
+                                            x.Invalidate()
                                     )
 
-    [<EntryPoint; System.STAThread>]
+        override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
+            trayIcon.Dispose()
+            Application.Exit()
+
+    [<EntryPoint>](*; System.STAThread>*)
     let main argv = 
         let a = new TrayApplication()
-       
         Application.Run(a)
-        //System.Console.ReadLine() |> ignore
-        0 // restituisci un intero come codice di uscita
+        System.Console.ReadLine() |> ignore
+        0

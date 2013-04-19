@@ -1,7 +1,7 @@
 ﻿// Ulteriori informazioni su F# all'indirizzo http://fsharp.net
 // Per ulteriori informazioni, vedere il progetto 'Esercitazione su F#'.
 module Program
-open FakeDriver
+open LeapDriver
 open GestIT
 open MyLeapFrame
 open Leap
