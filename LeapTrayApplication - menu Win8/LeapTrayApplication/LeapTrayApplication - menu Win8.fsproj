@@ -10,7 +10,7 @@
     <RootNamespace>LeapTrayApplication</RootNamespace>
     <AssemblyName>LeapTrayApplication</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
-    <Name>LeapTrayApplication</Name>
+    <Name>LeapTrayApplication - menu Win8</Name>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>

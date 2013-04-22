@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LeapTrayApplication", "LeapTrayApplication\LeapTrayApplication.fsproj", "{28CF6E2A-FDF8-4A8C-A7E8-C36D568A69E2}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "LeapTrayApplication - rock paper scissor", "LeapTrayApplication\LeapTrayApplication - rock paper scissor.fsproj", "{28CF6E2A-FDF8-4A8C-A7E8-C36D568A69E2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

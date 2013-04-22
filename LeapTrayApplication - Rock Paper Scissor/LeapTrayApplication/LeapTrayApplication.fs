@@ -1,6 +1,6 @@
 ﻿// Ulteriori informazioni su F# all'indirizzo http://fsharp.net
 // Per ulteriori informazioni, vedere il progetto 'Esercitazione su F#'.
-module LeapTrayApplication
+module RockPaperScissor
     open System.Windows.Forms
     open System.Drawing
     open System.Collections.Generic
@@ -9,6 +9,11 @@ module LeapTrayApplication
     open ClonableLeapFrame
     open LeapDriver
     
+    type Morra =
+        | Rock = 0
+        | Paper = 1
+        | Scissor = 2
+
     type TrayApplication () =
         inherit Form()
 
@@ -21,6 +26,9 @@ module LeapTrayApplication
         let vectorX = new Leap.Vector((float32)1, (float32)0, (float32)0)
         let vectorY = new Leap.Vector((float32)0, (float32)(-1),(float32) 0)
         let vectorZ = new Leap.Vector((float32)0, (float32)0, (float32)(-1))
+        let mutable playerplay:Morra = Morra.Rock
+        let mutable pcplay:int = 0
+        let r = new System.Random()
         (* Timestamps *)
         let ts_openedhand = ref(-1L : TimeStamp)
         let ts_closedhand = ref(-1L : TimeStamp)
@@ -389,19 +397,6 @@ module LeapTrayApplication
         let pointableCountIs n =
             new Predicate<LeapEventArgs>(fun x -> x.Frame.PointableList.Count = n)
 
-        (* Useless GroundTerms definitions *)
-        let vedodito = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, p)
-        let vedodito1 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 1)
-        let vedodito2 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 2)
-        let vedodito3 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 3)
-        let vedodito4 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 4)
-        let vedodito5 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveFinger, pointableCountIs 5)
-        let nonvedodito4 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 4)
-        let nonvedodito3 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 3)
-        let nonvedodito2 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 2)
-        let nonvedodito1 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 1)
-        let nonvedodito0 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 0)
-        let movefinger1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
         (*  GroundTerms definitions *)
         let openedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
         let closedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closetimedhand)
@@ -415,35 +410,26 @@ module LeapTrayApplication
         let movedfingerup = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerup)
         let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerdown)
         let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
-        (*
-        let movedfistdownright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistdownright)
-        let movedfistupright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistupright)
-        let movedfistdownleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movefistdownleft)
-        let s1 = new Sequence<_,_>(movedfistdownright, movedfistupright, movedfistdownleft)
-        let net = s1.ToGestureNet(s)
-        *)
+
         let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandright)
         let movedhandleft =  new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandleft)
         let movedhanddown =  new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehanddown)
 
-//        let rock = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandrock)
-//        let paper = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandpaper)
-//        let scissor = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandscissor)
-//        let ch = new Choice<_,_>(rock, paper, scissor)
+        (* NET for Rock Paper Scissor *)
         let oscillations = new Parallel<_,_>(movedhandright, movedhandleft)
         let s1 = new Sequence<_,_>(oscillations, movedhanddown)
         let net = s1.ToGestureNet(s)
-        (*
+        (* (* NET for closing menu *)
         let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
         let net1 = s1.ToGestureNet(s)
 
+        (* NET for opening menu + navigation through the menu + opening app *)
         let s2 = new Sequence<_,_>(closedhand2, openedhand2)
         let iterr = new Iter<_,_>(movedfingerright)
         let iterl = new Iter<_,_>(movedfingerleft)
         let iteru = new Iter<_,_>(movedfingerup)
         let iterd = new Iter<_,_>(movedfingerdown)
         let ch1 = new Choice<_,_>(iterr, iterl, iteru, iterd)
-    
         let s22 = new Sequence<_,_>(s2, ch1)
         let s222 = new Choice<_,_>(s22, pushedhanddown)
         let net222 = s222.ToGestureNet(s)
@@ -491,17 +477,44 @@ module LeapTrayApplication
                     openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             )
             movedhandright.Gesture.Add(fun (sender,e) -> lastHandRight <- e.Event.Frame.Timestamp
-                                                         Debug.WriteLine("1 RIGHT! {0}", e.Event.Frame.Timestamp))
+                                                         Debug.WriteLine("... RIGHT ... "))
             movedhandleft.Gesture.Add(fun (sender,e) -> lastHandLeft <- e.Event.Frame.Timestamp
-                                                        Debug.WriteLine("2 LEFT! {0}", e.Event.Frame.Timestamp))
+                                                        Debug.WriteLine("... LEFT ...", e.Event.Frame.Timestamp))
             movedhanddown.Gesture.Add(fun (sender,e) -> let f = e.Event.Frame
+                                                        Debug.Write("Player: ")
                                                         if f.PointableList.Count <= 1 then
-                                                            Debug.WriteLine("3 ROCK! {0}", e.Event.Frame.Timestamp)
+                                                            Debug.WriteLine("* ROCK! *")
+                                                            playerplay <- Morra.Rock
                                                         else if f.PointableList.Count <= 3 then
-                                                            Debug.WriteLine("3 SCISSOR! {0}", e.Event.Frame.Timestamp)
+                                                            Debug.WriteLine("* SCISSOR! *")
+                                                            playerplay <- Morra.Scissor
                                                         else if f.PointableList.Count >= 4 then
-                                                            Debug.WriteLine("3 PAPER! {0}", e.Event.Frame.Timestamp))
-            (*
+                                                            Debug.WriteLine("* PAPER! *")
+                                                            playerplay <- Morra.Paper
+                                                        pcplay <- r.Next(0, 2)
+                                                        Debug.Write("PC: ")
+                                                        match playerplay with
+                                                        | Morra.Rock -> match pcplay with
+                                                                            | 0 -> Debug.WriteLine("* ROCK! *               You're even!")
+                                                                            | 1 -> Debug.WriteLine("* PAPER! *              PC wins!")
+                                                                            | 2 -> Debug.WriteLine("* SCISSOR! *            Player wins!")
+                                                                            | _ -> ()
+                                                        | Morra.Paper -> match pcplay with
+                                                                            | 0 -> Debug.WriteLine("* ROCK! *               PC wins!")
+                                                                            | 1 -> Debug.WriteLine("* PAPER! *              You're even!")
+                                                                            | 2 -> Debug.WriteLine("* SCISSOR! *            Player wins!")
+                                                                            | _ -> ()
+                                                        | Morra.Scissor -> match pcplay with
+                                                                            | 0 -> Debug.WriteLine("* ROCK! *               PC wins!")
+                                                                            | 1 -> Debug.WriteLine("* PAPER! *              Player wins!")
+                                                                            | 2 -> Debug.WriteLine("* SCISSOR! *            You're even!")
+                                                                            | _ -> ()
+                                                        | _ -> ()
+                                                        Debug.WriteLine("")
+                                                        Debug.WriteLine("~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~")
+                                                        Debug.WriteLine("")
+            )
+            (* (* HANDLER *)
             s1.Gesture.Add(fun _ -> printfn "chiudi menu"; SendKeys.SendWait("{ESC}"))
             closedhand2.Gesture.Add(fun (sender,e) -> ts_closedhand := e.Event.Frame.Timestamp)
             s2.Gesture.Add(fun (sender,e) -> printfn "apri menu"; SendKeys.SendWait("^{ESC}"))
@@ -534,7 +547,7 @@ module LeapTrayApplication
             trayIcon.Dispose()
             Application.Exit()
 
-    [<EntryPoint>](*; System.STAThread>*)
+    [<EntryPoint; System.STAThread>]
     let main argv = 
         let a = new TrayApplication()
         Application.Run(a)
