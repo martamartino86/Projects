@@ -9,16 +9,17 @@ module RockPaperScissor
     open ClonableLeapFrame
     open LeapDriver
     
+    type Delegate = delegate of string -> unit
+
     type Morra =
         | Rock = 0
         | Paper = 1
         | Scissor = 2
 
-    type TrayApplication () =
+    type TrayApplication () as this =
         inherit Form()
+        let lbl = new Label()
 
-        let mutable trayMenu = null
-        let mutable trayIcon = null
         (* Structures *)
         let s = new LeapDriver.LeapSensor()
         let frameQueue = new Queue<ClonableFrame>()
@@ -43,6 +44,18 @@ module RockPaperScissor
         let mutable minX_glob = new ClonableFrame()
         let mutable maxY_glob = new ClonableFrame()
         let mutable nVariations = 0
+
+        do
+            this.BackColor <- Color.PeachPuff
+            this.MaximizeBox <- false
+            this.FormBorderStyle <- FormBorderStyle.FixedSingle
+            lbl.Visible <- true
+            lbl.Width <- 200
+            lbl.Height <- 50
+            lbl.Location <- new Point(this.Location.X + this.Width / 2 - lbl.Width / 2, this.Location.Y + this.Height / 2 - lbl.Height / 2)
+            lbl.Font <- new Font("Verdana", 10.F)
+            lbl.Text <- "* ROCK PAPER SCISSOR *"
+            this.Controls.Add(lbl)
 
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
@@ -419,28 +432,6 @@ module RockPaperScissor
         let oscillations = new Parallel<_,_>(movedhandright, movedhandleft)
         let s1 = new Sequence<_,_>(oscillations, movedhanddown)
         let net = s1.ToGestureNet(s)
-        (* (* NET for closing menu *)
-        let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
-        let net1 = s1.ToGestureNet(s)
-
-        (* NET for opening menu + navigation through the menu + opening app *)
-        let s2 = new Sequence<_,_>(closedhand2, openedhand2)
-        let iterr = new Iter<_,_>(movedfingerright)
-        let iterl = new Iter<_,_>(movedfingerleft)
-        let iteru = new Iter<_,_>(movedfingerup)
-        let iterd = new Iter<_,_>(movedfingerdown)
-        let ch1 = new Choice<_,_>(iterr, iterl, iteru, iterd)
-        let s22 = new Sequence<_,_>(s2, ch1)
-        let s222 = new Choice<_,_>(s22, pushedhanddown)
-        let net222 = s222.ToGestureNet(s)
-        *)
-        do
-            trayMenu <- new ContextMenu()
-            trayIcon <- new NotifyIcon()
-            trayIcon.Text <- "MyTrayApp";
-            trayIcon.Icon <- new Icon(SystemIcons.Application, 40, 40);
-            trayIcon.ContextMenu <- trayMenu;
-            trayIcon.Visible <- true;
 
         (* Sensor *)
         let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
@@ -454,10 +445,14 @@ module RockPaperScissor
                 | LeapFeatureTypes.NotActiveFinger | LeapFeatureTypes.NotActiveTool -> lastFrameInQueue.PointableList.Remove(id) |> ignore
                 | _ -> ()
 
+        let printLabel (s:string) =
+            lbl.Text <- s
+        let printLabel1 = printLabel
+        let deleg = new Delegate(printLabel1)
+
         override x.OnLoad(e:System.EventArgs) =
-            x.Visible <- false
-            trayIcon.Visible <- true
-            x.ShowInTaskbar <- false; // Remove from taskbar.
+            x.Visible <- true
+            x.ShowInTaskbar <- true // Remove from taskbar.
             (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
                 (* Removing too old frames *)
                 let t = e.Event.Frame.Timestamp
@@ -477,42 +472,54 @@ module RockPaperScissor
                     openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             )
             movedhandright.Gesture.Add(fun (sender,e) -> lastHandRight <- e.Event.Frame.Timestamp
-                                                         Debug.WriteLine("... RIGHT ... "))
+                                                         lbl.Invoke(deleg, "... ~~> THINKING ~~> ...") |> ignore
+                                                         lbl.BackColor <- Color.PeachPuff
+                                                         lbl.Invalidate()
+                                                         )
             movedhandleft.Gesture.Add(fun (sender,e) -> lastHandLeft <- e.Event.Frame.Timestamp
-                                                        Debug.WriteLine("... LEFT ...", e.Event.Frame.Timestamp))
+                                                        lbl.Invoke(deleg, "... <~~ THINKING <~~ ...") |> ignore
+                                                        lbl.BackColor <- Color.PeachPuff
+                                                        lbl.Invalidate()
+                                                        )
             movedhanddown.Gesture.Add(fun (sender,e) -> let f = e.Event.Frame
-                                                        Debug.Write("Player: ")
+                                                        let mutable s = "Player: "
+//                                                        lbl.Invoke(deleg, "Player: ") |> ignore
                                                         if f.PointableList.Count <= 1 then
-                                                            Debug.WriteLine("* ROCK! *")
+//                                                            lbl.Invoke(deleg, "* ROCK! *") |> ignore
+                                                            s <- s + "* ROCK! *\n"
+//                                                            lbl.Invalidate()
                                                             playerplay <- Morra.Rock
                                                         else if f.PointableList.Count <= 3 then
-                                                            Debug.WriteLine("* SCISSOR! *")
+//                                                            lbl.Invoke(deleg, "* SCISSOR! *") |> ignore
+                                                            s <- s +  "* SCISSOR! *\n"
+//                                                            lbl.Invalidate()
                                                             playerplay <- Morra.Scissor
                                                         else if f.PointableList.Count >= 4 then
-                                                            Debug.WriteLine("* PAPER! *")
+//                                                            lbl.Invoke(deleg, "* PAPER! *") |> ignore
+                                                            s <- s + "* PAPER! *\n"
+//                                                            lbl.Invalidate()
                                                             playerplay <- Morra.Paper
                                                         pcplay <- r.Next(0, 2)
-                                                        Debug.Write("PC: ")
+//                                                        lbl.Invoke(deleg, "PC: ") |> ignore
+                                                        s <- s + "PC: "
                                                         match playerplay with
                                                         | Morra.Rock -> match pcplay with
-                                                                            | 0 -> Debug.WriteLine("* ROCK! *               You're even!")
-                                                                            | 1 -> Debug.WriteLine("* PAPER! *              PC wins!")
-                                                                            | 2 -> Debug.WriteLine("* SCISSOR! *            Player wins!")
+                                                                            | 0 -> lbl.Invoke(deleg, s + "* ROCK! *\nYou're even!") |> ignore
+                                                                            | 1 -> lbl.Invoke(deleg, s + "* PAPER! *\nPC wins!") |> ignore; lbl.BackColor <- Color.Red
+                                                                            | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
                                                                             | _ -> ()
                                                         | Morra.Paper -> match pcplay with
-                                                                            | 0 -> Debug.WriteLine("* ROCK! *               PC wins!")
-                                                                            | 1 -> Debug.WriteLine("* PAPER! *              You're even!")
-                                                                            | 2 -> Debug.WriteLine("* SCISSOR! *            Player wins!")
+                                                                            | 0 -> lbl.Invoke(deleg, s + "* ROCK! *\nPC wins!") |> ignore; lbl.BackColor <- Color.Red
+                                                                            | 1 -> lbl.Invoke(deleg, s + "* PAPER! *\nYou're even!") |> ignore
+                                                                            | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
                                                                             | _ -> ()
                                                         | Morra.Scissor -> match pcplay with
-                                                                            | 0 -> Debug.WriteLine("* ROCK! *               PC wins!")
-                                                                            | 1 -> Debug.WriteLine("* PAPER! *              Player wins!")
-                                                                            | 2 -> Debug.WriteLine("* SCISSOR! *            You're even!")
+                                                                            | 0 -> lbl.Invoke(deleg, s + "* ROCK! *\nPC wins!") |> ignore; lbl.BackColor <- Color.Red
+                                                                            | 1 -> lbl.Invoke(deleg, s + "* PAPER! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
+                                                                            | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nYou're even!") |> ignore
                                                                             | _ -> ()
                                                         | _ -> ()
-                                                        Debug.WriteLine("")
-                                                        Debug.WriteLine("~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~ * ~")
-                                                        Debug.WriteLine("")
+                                                        lbl.Invalidate()
             )
             (* (* HANDLER *)
             s1.Gesture.Add(fun _ -> printfn "chiudi menu"; SendKeys.SendWait("{ESC}"))
@@ -529,27 +536,17 @@ module RockPaperScissor
                                                 SendKeys.SendWait("{UP 1}"))
             iterd.Gesture.Add(fun (sender,e) -> printfn "***************DOWN";
                                                 lastFingerDown <- e.Event.Frame.Timestamp
-
                                                 SendKeys.SendWait("{DOWN 1}"))
             s222.Gesture.Add(fun (sender,e) -> printfn "select"; 
                                                lastEnter <- e.Event.Frame.Timestamp
                                                SendKeys.SendWait("{ENTER}"))
             *)
-            trayIcon.DoubleClick.Add(fun _ ->
-                                            if x.Visible = true then
-                                                x.Visible <- false
-                                            else
-                                                x.Visible <- true
-                                            x.Invalidate()
-                                    )
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
-            trayIcon.Dispose()
             Application.Exit()
 
     [<EntryPoint; System.STAThread>]
     let main argv = 
         let a = new TrayApplication()
         Application.Run(a)
-        System.Console.ReadLine() |> ignore
         0
