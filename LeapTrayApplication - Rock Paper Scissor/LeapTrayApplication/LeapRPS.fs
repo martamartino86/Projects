@@ -469,7 +469,7 @@ module RockPaperScissor
                 else
                     (* update frame informations *)
                     UpdateInformations(f, e.FeatureType, id)
-                    openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
+                    //openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             )
             movedhandright.Gesture.Add(fun (sender,e) -> lastHandRight <- e.Event.Frame.Timestamp
                                                          lbl.Invoke(deleg, "... ~~> THINKING ~~> ...") |> ignore
@@ -483,24 +483,16 @@ module RockPaperScissor
                                                         )
             movedhanddown.Gesture.Add(fun (sender,e) -> let f = e.Event.Frame
                                                         let mutable s = "Player: "
-//                                                        lbl.Invoke(deleg, "Player: ") |> ignore
                                                         if f.PointableList.Count <= 1 then
-//                                                            lbl.Invoke(deleg, "* ROCK! *") |> ignore
                                                             s <- s + "* ROCK! *\n"
-//                                                            lbl.Invalidate()
                                                             playerplay <- Morra.Rock
                                                         else if f.PointableList.Count <= 3 then
-//                                                            lbl.Invoke(deleg, "* SCISSOR! *") |> ignore
                                                             s <- s +  "* SCISSOR! *\n"
-//                                                            lbl.Invalidate()
                                                             playerplay <- Morra.Scissor
                                                         else if f.PointableList.Count >= 4 then
-//                                                            lbl.Invoke(deleg, "* PAPER! *") |> ignore
                                                             s <- s + "* PAPER! *\n"
-//                                                            lbl.Invalidate()
                                                             playerplay <- Morra.Paper
                                                         pcplay <- r.Next(0, 2)
-//                                                        lbl.Invoke(deleg, "PC: ") |> ignore
                                                         s <- s + "PC: "
                                                         match playerplay with
                                                         | Morra.Rock -> match pcplay with
@@ -521,26 +513,6 @@ module RockPaperScissor
                                                         | _ -> ()
                                                         lbl.Invalidate()
             )
-            (* (* HANDLER *)
-            s1.Gesture.Add(fun _ -> printfn "chiudi menu"; SendKeys.SendWait("{ESC}"))
-            closedhand2.Gesture.Add(fun (sender,e) -> ts_closedhand := e.Event.Frame.Timestamp)
-            s2.Gesture.Add(fun (sender,e) -> printfn "apri menu"; SendKeys.SendWait("^{ESC}"))
-            iterr.Gesture.Add(fun (sender,e) -> printfn "***************RIGHT"
-                                                lastFingerRight <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{RIGHT 1}"))
-            iterl.Gesture.Add(fun (sender,e) -> printfn "***************LEFT";
-                                                lastFingerLeft <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{LEFT 1}"))
-            iteru.Gesture.Add(fun (sender,e) -> printfn "***************UP";
-                                                lastFingerUp <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{UP 1}"))
-            iterd.Gesture.Add(fun (sender,e) -> printfn "***************DOWN";
-                                                lastFingerDown <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{DOWN 1}"))
-            s222.Gesture.Add(fun (sender,e) -> printfn "select"; 
-                                               lastEnter <- e.Event.Frame.Timestamp
-                                               SendKeys.SendWait("{ENTER}"))
-            *)
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
             Application.Exit()

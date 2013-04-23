@@ -52,11 +52,11 @@
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Program.fs" />
     <None Include="App.config" />
     <None Include="LeapCSharp.dll" />
     <None Include="Leapd.dll" />
     <None Include="Leap.dll" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>

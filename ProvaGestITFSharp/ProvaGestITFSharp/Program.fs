@@ -1,8 +1,6 @@
 ﻿// Ulteriori informazioni su F# all'indirizzo http://fsharp.net
 // Per ulteriori informazioni, vedere il progetto 'Esercitazione su F#'.
 module Program
-// Ulteriori informazioni su F# all'indirizzo http://fsharp.net
-// Per ulteriori informazioni, vedere il progetto 'Esercitazione su F#'.
     open System.Collections.Generic
     open System.Diagnostics
     open GestIT
@@ -29,68 +27,71 @@ module Program
     let threshpointfinger:TimeStamp = 300000L
     let mutable minX_glob = new ClonableFrame()
     let mutable maxY_glob = new ClonableFrame()
-    let mutable nVariations = 0
 
+    let queueIDs = new List<FakeId>()
+    
     (* Predicates *)
     let speed (x:float32) (y:float32) = x / y
     let p = new Predicate<LeapEventArgs>(fun x -> true)
     
-    let movehandup (x:LeapEventArgs) =
+    let movehandup (i:int) (x:LeapEventArgs) =
         let f = x.Frame
-        let id = x.Id
-        if f.HandList.Count <> 1 then
-            false
+        if queueIDs.Count <= i then false
         else
-            let id = x.Id
-            let o = x.Frame.HandList.[id].Position
-            let coda =
-                frameQueue
-                |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
-            if coda |> Seq.isEmpty then
+            let id = queueIDs.[i] //x.Id
+            if f.HandList.Count <> 2 then
                 false
             else
-                let minY =
-                    coda
-                    |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
-                if o.y - minY.HandList.[id].Position.y > 100.f then
-                    coda
-                    |> Seq.filter (fun z -> z.Timestamp <= minY.Timestamp)
-                    |> Seq.forall (fun z -> z.HandList.[id].Position.y >= minY.HandList.[id].Position.y)
-//                    let lastframes =
-//                        coda
-//                        |> Seq.filter (fun z -> z.Timestamp >= f.Timestamp - 50000L)
-//                        |> Seq.forall (fun z -> z.HandList.[id].Velocity.MagnitudeSquared < 1000.f * 1000.f)
-                else
+                let o = x.Frame.HandList.[id].Position
+                let coda =
+                    frameQueue
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 100000L)
+                if coda |> Seq.isEmpty then
                     false
+                else
+                    let minY =
+                        coda
+                        |> Seq.minBy (fun z -> z.HandList.[id].Position.y)
+                    if o.y - minY.HandList.[id].Position.y > 20.f then
+                        coda
+                        |> Seq.filter (fun z -> z.Timestamp <= minY.Timestamp)
+                        |> Seq.forall (fun z -> z.HandList.[id].Position.y >= minY.HandList.[id].Position.y)
+    //                    let lastframes =
+    //                        coda
+    //                        |> Seq.filter (fun z -> z.Timestamp >= f.Timestamp - 50000L)
+    //                        |> Seq.forall (fun z -> z.HandList.[id].Velocity.MagnitudeSquared < 1000.f * 1000.f)
+                    else
+                        false
         
 
-    let movehanddown (x:LeapEventArgs) =
+    let movehanddown (i:int) (x:LeapEventArgs) =
         let f = x.Frame
-        let id = x.Id
-        if f.HandList.Count <> 1 then
-            false
+        if queueIDs.Count <= i then false
         else
-            let id = x.Id
-            let o = x.Frame.HandList.[id].Position
-            let coda =
-                frameQueue
-                |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
-            if coda |> Seq.isEmpty then
+            let id = queueIDs.[i] // x.Id
+            if f.HandList.Count <> 2 then
                 false
             else
-                let maxY =
-                    coda
-                    |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
-                if maxY.HandList.[id].Position.y - o.y > 100.f then
-                    coda
-                    |> Seq.filter (fun z -> z.Timestamp >= maxY.Timestamp)
-                    |> Seq.forall (fun z -> z.HandList.[id].Position.y <= maxY.HandList.[id].Position.y)
-//                    let lastframes =
-//                        coda
-//                        |> Seq.filter (fun z -> z.Timestamp >= f.Timestamp - 50000L)
-//                        |> Seq.forall (fun z -> z.HandList.[id].Velocity.MagnitudeSquared < 1000.f * 1000.f)
-                else
+                let o = x.Frame.HandList.[id].Position
+                let coda =
+                    frameQueue
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 100000L)
+                if coda |> Seq.isEmpty then
                     false
+                else
+                    let maxY =
+                        coda
+                        |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
+                    if maxY.HandList.[id].Position.y - o.y > 20.f then
+                        coda
+                        |> Seq.filter (fun z -> z.Timestamp >= maxY.Timestamp)
+                        |> Seq.forall (fun z -> z.HandList.[id].Position.y <= maxY.HandList.[id].Position.y)
+    //                    let lastframes =
+    //                        coda
+    //                        |> Seq.filter (fun z -> z.Timestamp >= f.Timestamp - 50000L)
+    //                        |> Seq.forall (fun z -> z.HandList.[id].Velocity.MagnitudeSquared < 1000.f * 1000.f)
+                    else
+                        false
 
     let pushhanddown (x:LeapEventArgs) =
         let thresh = 50.f
@@ -189,20 +190,37 @@ module Program
         let f = x.Frame
         (p x) && x.Frame.Timestamp - !refts < thresh
 
-    let closetimedhand = timedevent closehand ts_openedhand 150000L
-    let opentimedhand = timedevent openhand ts_closedhand 150000L
-
     let pointableCountIs n =
         new Predicate<LeapEventArgs>(fun x -> x.Frame.PointableList.Count = n)
 
+    let vedomani (n:int) (x:LeapEventArgs) =
+        x.Frame.HandList.Count = n
+    let nomano (x:LeapEventArgs) =
+        true
+
     (*  GroundTerms definitions *)
-    let vedomano1 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveHand, p)
-    let vedomano2 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveHand, p)
-    let s1 = new Parallel<_,_>(vedomano1, vedomano2)
+    let vedomani1 = new GroundTerm<_,_>(LeapFeatureTypes.ActiveHand, vedomani 2)
+    let perdomano = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveHand, nomano)
 
-    movedhanddown.Gesture.Add(fun (sender,e) -> ())
+    let muovosu1 = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveHand, movehandup 0)      ///   UP
+    let muovogiu2 = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveHand, movehanddown 1)    ///   DOWN
+    let muovosu2 = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveHand, movehandup 1)
+    let muovogiu1 = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveHand, movehanddown 0)
+    let pp1 = new Parallel<_,_>(muovosu1, muovogiu2)
+    let pp2 = new Parallel<_,_>(muovosu2, muovogiu1)
+    let c1 = new Choice<_,_>(pp1, pp2)
+    let it = new Iter<_,_>(c1)
 
+    let seq = new Sequence<_,_>(vedomani1, it)
+    let pp3 = new Parallel<_,LeapEventArgs>(muovogiu1, muovogiu1)
 
+    let ch = new Choice<_,_>(seq, perdomano)
+    let net = ch.ToGestureNet(s)
+
+    vedomani1.Gesture.Add(fun (sender,e) -> printfn ("vedo 2 mani"); queueIDs.Add(e.Event.Id))
+    it.Gesture.Add(fun (sender,e) -> printfn("~ ciao ciao! "))
+    //ch.Gesture.Add(fun (sender,e) -> printfn("ahi ahi ahi... scazzato!"))
+    perdomano.Gesture.Add(fun (sender,e) -> if queueIDs.Remove(e.Event.Id) then printfn "persa mano - fine male gesture" )
     (* Sensor *)
     let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
         (* Update informations in the last enqueued frame *)
@@ -215,21 +233,22 @@ module Program
             | LeapFeatureTypes.NotActiveFinger | LeapFeatureTypes.NotActiveTool -> lastFrameInQueue.PointableList.Remove(id) |> ignore
             | _ -> ()
 
-        (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
-            (* Removing too old frames *)
-            let t = e.Event.Frame.Timestamp
-            while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
-                frameQueue.Dequeue() |> ignore
-            (* Receiving updates from sensor *)
-            let f = e.Event.Frame
-            let id = e.Event.Id
-            if lastFrameInQueue.Timestamp <> f.Timestamp then
-                (* in this case, surely lastFrame.TS < f.TS, so it has to be added to the queue *)
-                let newFrame = f.Clone()
-                frameQueue.Enqueue(newFrame)
-                lastFrameInQueue <- newFrame
-            else
-                (* update frame informations *)
-                UpdateInformations(f, e.FeatureType, id)
-                openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
-        )
+    (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
+        (* Removing too old frames *)
+        let t = e.Event.Frame.Timestamp
+        while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
+            frameQueue.Dequeue() |> ignore
+        (* Receiving updates from sensor *)
+        let f = e.Event.Frame
+        let id = e.Event.Id
+        if lastFrameInQueue.Timestamp <> f.Timestamp then
+            (* in this case, surely lastFrame.TS < f.TS, so it has to be added to the queue *)
+            let newFrame = f.Clone()
+            frameQueue.Enqueue(newFrame)
+            lastFrameInQueue <- newFrame
+        else
+            (* update frame informations *)
+            UpdateInformations(f, e.FeatureType, id)
+    )
+
+    System.Console.ReadLine() |> ignore
