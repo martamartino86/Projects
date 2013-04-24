@@ -9,9 +9,16 @@ module MenuWin8
     open ClonableLeapFrame
     open LeapDriver
     
-    type TrayApplication () =
+    type Delegate = delegate of unit -> unit
+
+    type TrayApplication () as this =
         inherit Form()
         
+        let pen:Pen = new Pen(Color.FromArgb(255, 0, 0, 0))
+        let mutable point = new Point(0,0)
+        let mutable pointScreen = new Point(0, 0)
+        let lbl = new Label()
+
         let mutable trayMenu = null
         let mutable trayIcon = null
         (* Structures *)
@@ -41,25 +48,64 @@ module MenuWin8
         let movehandright (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
-            let exists =
-                if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) then
+            if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) then
+                false
+            else
+                (*
+                let l =
+                    frameQueue
+                    |> Seq.pairwise
+                    |> Seq.filter (fun (f1,f2) ->
+                        let p1 = f1.HandList.[id].Position
+                        let p2 = f2.HandList.[id].Position
+                        let delta_s = System.Math.Abs(p2.x - p1.x)
+                        let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
+                        let v_m = (delta_s / delta_t) * 1000000.f
+                        (p2.x >= p1.x) && (v_m >= 0.4f)
+                    )
+                    |> Seq.length
+                let thresh = int(float(frameQueue.Count) * 0.7)
+                l > thresh
+                *)
+                let coda =
+                    frameQueue
+                    |> Seq.filter (fun y -> y.Timestamp >= f.Timestamp - 150000L)
+                if Seq.isEmpty coda then
                     false
                 else
-                    let l =
-                        frameQueue
-                        |> Seq.pairwise
-                        |> Seq.filter (fun (f1,f2) ->
-                            let p1 = f1.HandList.[id].Position
-                            let p2 = f2.HandList.[id].Position
-                            let delta_s = System.Math.Abs(p2.x - p1.x)
-                            let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
-                            let v_m = (delta_s / delta_t) * 1000000.f
-                            (p2.x >= p1.x) && (v_m >= 0.4f)
-                        )
-                        |> Seq.length
-                    let thresh = int(float(frameQueue.Count) * 0.7)
-                    l > thresh
-            exists
+                    let minX =
+                        coda
+                        |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
+                    if f.HandList.[id].Position.x - minX.HandList.[id].Position.x < 50.F then
+                        false
+                    else
+                        // se in 2/10 sec vado sempre a destra e ho fatto almeno 5 cm, do il predicato come vero
+                        let exists =
+                            coda
+                            |> Seq.forall (fun q -> q.HandList.[id].Position.x >= minX.HandList.[id].Position.x)
+                        exists
+
+//            let f = x.Frame
+//            let id = x.Id
+//            let exists =
+//                if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) then
+//                    false
+//                else
+//                    let l =
+//                        frameQueue
+//                        |> Seq.pairwise
+//                        |> Seq.filter (fun (f1,f2) ->
+//                            let p1 = f1.HandList.[id].Position
+//                            let p2 = f2.HandList.[id].Position
+//                            let delta_s = System.Math.Abs(p2.x - p1.x)
+//                            let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
+//                            let v_m = (delta_s / delta_t) * 1000000.f
+//                            (p2.x >= p1.x) && (v_m >= 0.4f)
+//                        )
+//                        |> Seq.length
+//                    let thresh = int(float(frameQueue.Count) * 0.7)
+//                    l > thresh
+//            exists
     
         let movehandleft (x:LeapEventArgs) =
             let f = x.Frame
@@ -214,6 +260,9 @@ module MenuWin8
         let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerdown)
         let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
 
+        let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandright)
+        let nothand = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveHand, p)
+
         let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
         let net1 = s1.ToGestureNet(s)
 
@@ -228,6 +277,17 @@ module MenuWin8
         let s222 = new Choice<_,_>(s22, pushedhanddown)
         let net222 = s222.ToGestureNet(s)
 
+        let imove = new Iter<_,_>(movedhandright)
+        let ichoice = new Choice<_,_>(imove, nothand)
+        let net3 = ichoice.ToGestureNet(s)
+
+        (* PROVA PAINT *)
+        let mf = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
+        let naf = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, p)
+        let i = new Iter<_,_>(mf)
+        let c = new Choice<_,_>(i, naf)
+        let netpaint = c.ToGestureNet(s)
+
         do
             trayMenu <- new ContextMenu()
             trayIcon <- new NotifyIcon()
@@ -235,6 +295,18 @@ module MenuWin8
             trayIcon.Icon <- new Icon(SystemIcons.Application, 40, 40);
             trayIcon.ContextMenu <- trayMenu;
             trayIcon.Visible <- true;
+            lbl.Visible <- true
+            lbl.Width <- 100
+            lbl.Height <- 50
+            lbl.Location <- new Point(100, 100)
+            lbl.BackColor <- Color.Red
+            this.Controls.Add(lbl)
+        
+        let printLabel () =
+            lbl.Text <- point.ToString()
+        let printLabel1 = printLabel
+        let deleg = new Delegate(printLabel1)
+
 
         (* Sensor *)
         let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
@@ -311,6 +383,7 @@ module MenuWin8
             s222.Gesture.Add(fun (sender,e) -> initializeTrashes
                                                lastEnter <- e.Event.Frame.Timestamp
                                                SendKeys.SendWait("{ENTER}"))
+
             trayIcon.MouseDoubleClick.Add(fun _ ->
                                             if x.Visible = true then
                                                 x.Visible <- false
@@ -318,6 +391,18 @@ module MenuWin8
                                                 x.Visible <- true
                                             x.Invalidate()
                                     )
+            movedhandright.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("^+{ESC}") )
+            (* PROVA PAINT *)
+            mf.Gesture.Add(fun (sender,e) -> point <- new Point((int)e.Event.Frame.PointableList.[e.Event.Id].Position.x, (int)e.Event.Frame.PointableList.[e.Event.Id].Position.y)
+                                             lbl.Invoke(deleg) |> ignore
+                                             lbl.Invalidate()
+                                             x.Invalidate())
+        
+        override x.OnPaint(e:PaintEventArgs) =
+            let g = e.Graphics
+            pointScreen.X <- point.X + System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width / 2
+            pointScreen.Y <- (0 - point.Y) + System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height / 2 + 200
+            g.DrawLine(pen, pointScreen, new Point(pointScreen.X + 20, pointScreen.Y + 20))
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
             trayIcon.Dispose()
@@ -326,5 +411,7 @@ module MenuWin8
     [<EntryPoint; System.STAThread>]
     let main argv = 
         let a = new TrayApplication()
+        a.Width <- System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width
+        a.Height <- System.Windows.Forms.Screen.PrimaryScreen.Bounds.Height
         Application.Run(a)
         0

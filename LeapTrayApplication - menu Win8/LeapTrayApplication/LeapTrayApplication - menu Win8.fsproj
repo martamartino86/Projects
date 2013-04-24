@@ -50,7 +50,7 @@
     <None Include="Leapd.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <Compile Include="LeapTrayApplication.fs" />
+    <Compile Include="MenuWin.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="GestIT_FSharp">
