@@ -25,6 +25,7 @@ module MenuWin8
         let s = new LeapDriver.LeapSensor()
         let frameQueue = new Queue<ClonableFrame>()
         let mutable lastFrameInQueue = new ClonableFrame() // it represents the last enqueued frame
+        let mutable queueIDs = new List<FakeId>()
         let vectorX = new Leap.Vector((float32)1, (float32)0, (float32)0)
         let vectorY = new Leap.Vector((float32)0, (float32)(-1),(float32) 0)
         let vectorZ = new Leap.Vector((float32)0, (float32)0, (float32)(-1))
@@ -45,90 +46,58 @@ module MenuWin8
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
         let p = new Predicate<LeapEventArgs>(fun x -> true)
-        let movehandright (x:LeapEventArgs) =
+
+        let activehand (n:int) (x:LeapEventArgs) =
+            x.Frame.HandList.Count = n
+
+        let movehand (dir:int) (x:LeapEventArgs) = // dir = 0 per LEFT, dir = 1 per RIGHT
             let f = x.Frame
             let id = x.Id
-            if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) then
+            if f.HandList.Count <> 2 then
                 false
             else
-                (*
-                let l =
-                    frameQueue
-                    |> Seq.pairwise
-                    |> Seq.filter (fun (f1,f2) ->
-                        let p1 = f1.HandList.[id].Position
-                        let p2 = f2.HandList.[id].Position
-                        let delta_s = System.Math.Abs(p2.x - p1.x)
-                        let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
-                        let v_m = (delta_s / delta_t) * 1000000.f
-                        (p2.x >= p1.x) && (v_m >= 0.4f)
-                    )
-                    |> Seq.length
-                let thresh = int(float(frameQueue.Count) * 0.7)
-                l > thresh
-                *)
+                let o = x.Frame.HandList.[id].Position
                 let coda =
                     frameQueue
-                    |> Seq.filter (fun y -> y.Timestamp >= f.Timestamp - 150000L)
-                if Seq.isEmpty coda then
+                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 200000L)
+                if coda |> Seq.isEmpty then
                     false
                 else
-                    let minX =
-                        coda
-                        |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
-                    if f.HandList.[id].Position.x - minX.HandList.[id].Position.x < 50.F then
-                        false
-                    else
-                        // se in 2/10 sec vado sempre a destra e ho fatto almeno 5 cm, do il predicato come vero
-                        let exists =
+                    if dir = 0 then // LEFT
+                        let minX =
                             coda
-                            |> Seq.forall (fun q -> q.HandList.[id].Position.x >= minX.HandList.[id].Position.x)
-                        exists
-
-//            let f = x.Frame
-//            let id = x.Id
-//            let exists =
-//                if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) then
-//                    false
-//                else
-//                    let l =
-//                        frameQueue
-//                        |> Seq.pairwise
-//                        |> Seq.filter (fun (f1,f2) ->
-//                            let p1 = f1.HandList.[id].Position
-//                            let p2 = f2.HandList.[id].Position
-//                            let delta_s = System.Math.Abs(p2.x - p1.x)
-//                            let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
-//                            let v_m = (delta_s / delta_t) * 1000000.f
-//                            (p2.x >= p1.x) && (v_m >= 0.4f)
-//                        )
-//                        |> Seq.length
-//                    let thresh = int(float(frameQueue.Count) * 0.7)
-//                    l > thresh
-//            exists
+                            |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
+                        if o.x - minX.HandList.[id].Position.y > 50.f then
+                            coda
+                            |> Seq.filter (fun z -> z.Timestamp >= minX.Timestamp)
+                            |> Seq.forall (fun z -> z.HandList.[id].Position.x >= minX.HandList.[id].Position.x)
+                        else
+                            false
+                    else if dir = 1 then // RIGHT
+                        let maxX =
+                            coda
+                            |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
+                        if maxX.HandList.[id].Position.x - o.x > 50.f then
+                            coda
+                            |> Seq.filter (fun z -> z.Timestamp <= maxX.Timestamp)
+                            |> Seq.forall (fun z -> z.HandList.[id].Position.x <= maxX.HandList.[id].Position.x)
+                        else
+                            false
+                    else false
     
-        let movehandleft (x:LeapEventArgs) =
+        let areclose (x:LeapEventArgs) =
             let f = x.Frame
-            let id = x.Id
-            let exists =
-                if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) then
-                    false
-                else
-                    let l =
-                        frameQueue
-                        |> Seq.pairwise
-                        |> Seq.filter (fun (f1,f2) ->
-                            let p1 = f1.HandList.[id].Position
-                            let p2 = f2.HandList.[id].Position
-                            let delta_s = System.Math.Abs(p2.x - p1.x)
-                            let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
-                            let v_m = (delta_s / delta_t) * 1000000.f
-                            (p2.x <= p1.x) && (v_m >= 0.4f)
-                        )
-                        |> Seq.length
-                    let thresh = int(float(frameQueue.Count) * 0.7)
-                    l > thresh
-            exists
+            if f.HandList.Count <> 2 then
+                false
+            else
+                let ids = f.HandList.Keys |> Seq.toArray
+                let n1 = f.HandList.[ids.[0]].Normal
+                let n2 = f.HandList.[ids.[1]].Normal
+                let a1 = n1.AngleTo(vectorX) * 180.f / (float32)System.Math.PI
+                let a2 = n2.AngleTo(vectorX) * 180.f / (float32)System.Math.PI
+                let x1 = f.HandList.[ids.[0]].Position.x
+                let x2 = f.HandList.[ids.[1]].Position.x
+                (a1 < 20.f && a2 > 160.f) || (a1 > 160.f && a2 < 20.f) && System.Math.Abs(x1 - x2) < 50.f
     
         let pushhanddown (x:LeapEventArgs) =
             let thresh = 50.f
@@ -247,20 +216,27 @@ module MenuWin8
         let nonvedodito0 = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, pointableCountIs 0)
         let movefinger1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
         (*  GroundTerms definitions *)
+        // chiudi menu
         let openedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
         let closedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closetimedhand)
         let keepclosedhand = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, keepclosed)
 
+        // apri menu
         let closedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
         let openedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, opentimedhand)
     
+        // scorri icone menu e apri
         let movedfingerright = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerright)
         let movedfingerleft = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerleft)
         let movedfingerup = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerup)
         let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerdown)
         let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
 
-        let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandright)
+        // batti le mani
+        let activehands = new GroundTerm<_,_>(LeapFeatureTypes.ActiveHand, activehand 2)
+        let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehand 0) // mano a dx (non importa quale)
+        let movedhandleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehand 1)  // mano a sx (idem)
+        let handsareclose = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, areclose)
         let nothand = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveHand, p)
 
         let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
@@ -274,12 +250,19 @@ module MenuWin8
         let ch1 = new Choice<_,_>(iterr, iterl, iteru, iterd)
     
         let s22 = new Sequence<_,_>(s2, ch1)
-        let s222 = new Choice<_,_>(s22, pushedhanddown)
+        let ch2 = new Choice<_,_>(pushedhanddown, s1)
+        let s222 = new Choice<_,_>(s22, ch2)
         let net222 = s222.ToGestureNet(s)
 
-        let imove = new Iter<_,_>(movedhandright)
-        let ichoice = new Choice<_,_>(imove, nothand)
-        let net3 = ichoice.ToGestureNet(s)
+        let par = new Parallel<_,_>(movedhandleft, movedhandright)
+        let iterpar = new Iter<_,_>(par)
+        let sequ = new Sequence<_,_>(activehands, iterpar)
+        let choi1 = new Choice<_,_>(handsareclose, nothand)
+        let choi2 = new Choice<_,_>(sequ, choi1)
+        let netclaphands = choi2.ToGestureNet(s)
+//        let imove = new Iter<_,_>(movedhandright)
+//        let ichoice = new Choice<_,_>(imove, nothand)
+//        let net3 = ichoice.ToGestureNet(s)
 
         (* PROVA PAINT *)
         let mf = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
@@ -306,7 +289,6 @@ module MenuWin8
             lbl.Text <- point.ToString()
         let printLabel1 = printLabel
         let deleg = new Delegate(printLabel1)
-
 
         (* Sensor *)
         let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
@@ -391,13 +373,14 @@ module MenuWin8
                                                 x.Visible <- true
                                             x.Invalidate()
                                     )
-            movedhandright.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("^+{ESC}") )
+//            movedhandright.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("^+{ESC}") )
             (* PROVA PAINT *)
             mf.Gesture.Add(fun (sender,e) -> point <- new Point((int)e.Event.Frame.PointableList.[e.Event.Id].Position.x, (int)e.Event.Frame.PointableList.[e.Event.Id].Position.y)
                                              lbl.Invoke(deleg) |> ignore
                                              lbl.Invalidate()
                                              x.Invalidate())
-        
+            nothand.Gesture.Add(fun (sender,e) -> Debug.WriteLine("Mano scomparsa..."))
+            handsareclose.Gesture.Add(fun (sender,e) -> Debug.WriteLine("n hands: {0}", e.Event.Frame.HandList.Count); SendKeys.SendWait("^+{ESC}"))
         override x.OnPaint(e:PaintEventArgs) =
             let g = e.Graphics
             pointScreen.X <- point.X + System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width / 2
