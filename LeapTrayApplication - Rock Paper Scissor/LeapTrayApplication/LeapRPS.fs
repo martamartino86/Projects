@@ -501,9 +501,9 @@ module RockPaperScissor
                                                                             | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
                                                                             | _ -> ()
                                                         | Morra.Paper -> match pcplay with
-                                                                            | 0 -> lbl.Invoke(deleg, s + "* ROCK! *\nPC wins!") |> ignore; lbl.BackColor <- Color.Red
+                                                                            | 0 -> lbl.Invoke(deleg, s + "* ROCK! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
                                                                             | 1 -> lbl.Invoke(deleg, s + "* PAPER! *\nYou're even!") |> ignore
-                                                                            | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
+                                                                            | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nPC wins!") |> ignore; lbl.BackColor <- Color.Red
                                                                             | _ -> ()
                                                         | Morra.Scissor -> match pcplay with
                                                                             | 0 -> lbl.Invoke(deleg, s + "* ROCK! *\nPC wins!") |> ignore; lbl.BackColor <- Color.Red

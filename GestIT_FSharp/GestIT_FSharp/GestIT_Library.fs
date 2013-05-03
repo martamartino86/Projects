@@ -2,20 +2,36 @@ namespace GestIT
 
 open System.Runtime.InteropServices
 
+/// <summary>
+/// It represents the model of a tipical event coming from a sensor.
+/// The generic 'T type is relative to the feature.
+/// The generic 'U type is the information about the event itself.
+/// </summary>
 type SensorEventArgs<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (t:'T, e:'U) =
   inherit System.EventArgs()
   member x.FeatureType = t
   member x.Event = e
 
+/// <summary>
+/// Generic sensor interface, to be implemented for publishing events.
+/// </summary>
 type ISensor<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs =
   [<CLIEvent>]
   abstract member SensorEvents: IEvent<SensorEventArgs<'T,'U>>
 
-
+/// <summary>
+/// Generic type representing a Petri's Net token.
+/// </summary>
 type Token () =
   class
   end
 
+/// <summary>
+/// It represents the model of a net created from a gesture definition.
+/// When one or more tokens come to the end of a net, it is able to notify its completion through sensor events.
+/// The generic 'T type is relative to the feature.
+/// The generic 'U type is the information about the event itself.
+/// </summary>
 [<AbstractClass>]
 type GestureNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   let completionEvent = new Event<SensorEventArgs<'T,'U> * seq<Token>>()
@@ -25,6 +41,11 @@ type GestureNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   abstract member AddTokens: Token seq -> unit
   abstract member RemoveTokens: Token seq -> unit
 
+/// <summary>
+/// It represents the gesture expression, which has to be transformed into a GestureNet for allowing the token transition.
+/// The generic 'T type is relative to the feature.
+/// The generic 'U type is the information about the event itself.
+/// </summary>
 [<AbstractClass>]
 type GestureExpr<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   let gestureEvent = new Event<_>()
@@ -43,8 +64,18 @@ type GestureExpr<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
     net.AddTokens([new Token()])
     net
 
+/// <summary>
+/// It represents a predicate, which is a condition associated to a single Ground Term.
+/// If validated, it permits the transition of the token to the next Ground Term.
+/// </summary>
 type Predicate<'U> = delegate of 'U -> bool
 
+/// <summary>
+/// It represents a generic Ground Term, which is a combination of a feature (for example a touch start) and a predicate.
+/// As subclass of GestureExpr, even a single GroundTerm can notify with an event the validation of its predicate.
+/// The generic 'T type is relative to the feature.
+/// The generic 'U type is the information about the event itself.
+/// </summary>
 type GroundTerm<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (f:'T, ?p:Predicate<'U>) =
   inherit GestureExpr<'T,'U>()
   new(f,p) = GroundTerm<_,_>(f, new Predicate<_>(p))
@@ -89,6 +120,12 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
     if tokens.Count = 0 then
       clearHandler()
 
+/// <summary>
+/// It represents a generic operator, which is the element that connects two or more subnets between each others.
+/// Please note that every subnet could be a single Ground Term.
+/// The generic 'T type is relative to the feature.
+/// The generic 'U type is the information about the event itself.
+/// </summary>
 [<AbstractClass>]
 type private OperatorNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subnets:GestureNet<'T,'U>[]) =
   inherit GestureNet<'T,'U>()
@@ -101,6 +138,9 @@ type private OperatorNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArg
     for n in subnets do
       n.RemoveTokens(ts)
 
+/// <summary>
+/// It represents the Sequence operator.
+/// </summary>
 type Sequence<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subexprs:GestureExpr<'T,'U>[]) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
@@ -113,7 +153,9 @@ type Sequence<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System
     subnets.[subnets.Length-1].Completion.Add(net.Completed)
     net
 
-
+/// <summary>
+/// It represents the Parallel operator.
+/// </summary>
 type Parallel<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subexprs:GestureExpr<'T,'U>[]) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
@@ -138,6 +180,9 @@ type Parallel<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System
       n.Completion.Add(mycb)
     net
 
+/// <summary>
+/// It represents the Choice operator.
+/// </summary>
 type Choice<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.ParamArray>] subexprs:GestureExpr<'T,'U>[]) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =
@@ -153,6 +198,9 @@ type Choice<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs ([<System.P
                        net.Completed(e,ts))
     net
 
+/// <summary>
+/// It represents the Iter operator.
+/// </summary>
 type Iter<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs (x:GestureExpr<'T,'U>) =
   inherit GestureExpr<'T,'U>()
   override this.ToNet(s) =

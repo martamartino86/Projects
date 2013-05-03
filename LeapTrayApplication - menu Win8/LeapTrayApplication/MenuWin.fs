@@ -38,10 +38,10 @@ module MenuWin8
         let mutable lastFingerUp:TimeStamp = -1L
         let mutable lastFingerDown:TimeStamp = -1L
         let mutable thresh:TimeStamp = 300000L
-        let mutable threshpointfingerleft:TimeStamp = 300000L
-        let mutable threshpointfingerright:TimeStamp = 300000L
-        let mutable threshpointfingerup:TimeStamp = 300000L
-        let mutable threshpointfingerdown:TimeStamp = 300000L
+        let mutable threshpointfingerleft:TimeStamp = thresh
+        let mutable threshpointfingerright:TimeStamp = thresh
+        let mutable threshpointfingerup:TimeStamp = thresh
+        let mutable threshpointfingerdown:TimeStamp = thresh
 
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
@@ -234,7 +234,7 @@ module MenuWin8
         let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerdown)
         let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
 
-//        // batti le mani
+        // batti le mani
         let activehands = new GroundTerm<_,_>(LeapFeatureTypes.ActiveHand, activehand 2)
         let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehand 0) // mano a dx (non importa quale)
         let movedhandleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehand 1)  // mano a sx (idem)
@@ -242,9 +242,7 @@ module MenuWin8
         let nothand = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveHand, p)
 
         let s1 = new Sequence<_,_>((*openedhand1, closedhand1*) closedhand2, keepclosedhand) // chiudi (tenendo chiusa mano)
-
         let s2 = new Sequence<_,_>(closedhand2, openedhand2) // apri
-
         let iterr = new Iter<_,_>(movedfingerright)
         let iterl = new Iter<_,_>(movedfingerleft)
         let iteru = new Iter<_,_>(movedfingerup)
@@ -255,7 +253,6 @@ module MenuWin8
         let ch3 = new Choice<_,_>(ch1, ch2)
         let s22 = new Sequence<_,_>(s2, ch3)
         let net222 = s22.ToGestureNet(s)
-
 
         let par = new Parallel<_,_>(movedhandleft, movedhandright)
         let iterpar = new Iter<_,_>(par)
