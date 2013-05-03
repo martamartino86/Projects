@@ -1,0 +1,43 @@
+{\rtf1\ansi\ansicpg1252\deff0\nouicompat\deflang1040{\fonttbl{\f0\fnil\fcharset0 Calibri;}}
+{\*\generator Riched20 6.2.9200}\viewkind4\uc1 
+\pard\sa200\sl276\slmult1\qj\f0\fs22\lang16 LEAP\par
+Leap \'e8 un dispositivo in grado di rilevare palmi, dita e oggetti similarmente affusolati, garantendo un'altra precisione nonch\'e9 un elevato frame-rate (tipicamente si mantiene sui 100 frame/sec, ma in situazioni di stress pu\'f2 scendere anche a 30 frame/sec). Le informazioni fornite dall'SDK ad ogni frame sono una fotografia del momento: contengono posizioni, rotazioni, direzioni, numero di mani e dita visibili, pi\'f9 altre funzioni che permettono di confrontare il frame corrente con uno precedente per determinare precisi comportamenti di interesse.\par
+Il campo visivo del Leap parte dal centro del dispositivo e si estende verso l'alto formando una piramide invertita; in particolare, il rilevamento risulta migliore a partire da 25 mm fino a circa 40 cm verso l'alto. Le informazioni spaziali vengono fornite in millimetri, mentre quelle temporali in microsecondi.\par
+Il Leap implementa il sistema di coordinate cartesiano "right-handed", come si vede dalla figura sottostante.\par
+\tab /////////////////// IMG LEAP\par
+L'origine \'e8 situata sulla punta della piramide immaginaria del campo visivo, mentre gli assi X e Z rimangono paralleli al piano e l'asse Y sale verso l'alto (contrariamente all'orientamento tipico di tutti i sistemi grafici).\par
+Quando il Leap rileva mani, dita o altri strumenti nel suo campo visivo, provvede ad aggiornare un insieme di dati detto \i frame\i0 , ed ogni frame contiene la lista degli oggetti visibili in quel momento. In particolare, il riconoscimento nel tempo di tali oggetti \'e8 garantito dall'assegnamento di un ID univoco che rimane tale fino a quando l'oggetto non scompare dalla visuale; gli ID non vengono distinti a seconda dell'oggetto a cui sono assegnati. Un problema noto \'e8 che se l'oggetto scompare e ricompare dopo anche un solo frame, il Leap gli assegna un nuovo ID (sfruttando peraltro un pesante riuso).\par
+* Palmi\par
+Il modello relativo ai palmi fornisce informazioni riguardanti la posizione, l'orientamento, le liste di dita e/o tools a cui \'e8 associata, ed altre caratteristiche quali il raggio della sfera sottesa al palmo, la velocit\'e0 di movimento. Il Leap non determina se il palmo \'e8 relativo ad una mano destra o sinistra, e possono comunque apparire pi\'f9 di due mani contemporaneamente (anche se \'e8 consigliato usarne massimo due per non sovraccaricare inutilmente il sensore). Se un dito o un tool non viene ricollegato a nessuna mano, allora non apparterr\'e0 ad alcuna lista nei palmi rilevati.\par
+* Oggetti Puntabili\par
+Le dita e i tool sono stati raggruppati in un'unica lista generica, che rappresenta tutti gli oggetti che puntano verso qualcosa (da qui il nome Pointables). Anche di questi possiamo raccogliere numerose informazioni, quali posizione, rotazione, direzione, lunghezza e larghezza, velocit\'e0 di spostamento. Ovviamente \'e8 messo a disposizione un apposito metodo per sapere se l'oggetto Pointable \'e8 un dito o un comune strumento affusolato.\par
+L'SDK del Leap fornisce un'applicazione di esempio, chiamata \i Visualizer\i0 , che fornisce una visione immediata ed astratta di quello che il sensore \'e8 capace di vedere.\par
+\tab //////////////// PRINT DEL VISUALIZER\par
+L'SDK permette alle applicazioni esterne di ricevere informazioni dal Leap attraverso due classi specifiche, Controller e Listener. L'istanza della prima rappresenta l'interfaccia tra il Leap e l'applicazione stessa, mentre la seconda si aggancia al controller e fornisce metodi handler da implementare per modellare il comportamento della propria applicazione. Quindi, mentre il controller si occupa di collegare il dispositivo all'applicazione ed invocare le callback implementate dal listener, il listener ad esso collegato le esegue.\par
+\par
+\par
+LEAP E UNITY\par
+A causa dell'eccessiva approssimatezza di \i Visualizer \i0 (non tanto nella precisione quanto nella rappresentazione visiva delle informazioni), \'e8 stato ritenuto necessario implementarne una versione che rappresentasse altre informazioni interessanti (per esempio, i palmi, le dimensioni delle dita, informazioni sulla sfera). \par
+\tab ////////////////// PRINT DI UNITY IN AZIONE\par
+Come si pu\'f2 vedere, i palmi sono rappresentati da semplici piani, mentre dita e tools sono rappresentati da cilindri creati sulla base delle informazioni ricevute dal Leap.\par
+\par
+
+\pard\sa200\sl276\slmult1 LEAP DRIVER\par
+A causa di alcune mancanze dovute all'apparecchio fisico, \'e8 stato necessario implementare un driver che si interfacciasse tra il Leap  e le altre applicazioni interessate a riceverne i dati in stato consistente, per esempio quelle che riconoscono gesture.\par
+In particolare, \'e8 stato notato che:\par
+- Leap tende a perdere spesso nel tempo la visibilit\'e0 degli oggetti nel suo campo visivo; questo lo porta a riassegnare sempre nuovi ID sfruttandone pesantemente il riuso, e ci\'f2 complica in modo notevole lo studio del comportamento temporale delle mani;\par
+- l'oggetto Frame ricevuto ad ogni OnFrame dal controller \'e8 una singola istanza, i cui campi vengono modificati ad ogni invio; inoltre, non sono state rese disponibili funzioni di clonazione n\'e9 di Frame, n\'e9 di Hand o Pointable.\par
+Per venire incontro a tali limitazioni, prima di tutto sono stati implementati i tipi ClonableFrame, ClonableHand e ClonablePointable, in modo da rendere possibile sia la clonazione immediata di tali oggetti, sia la creazione di una timeline di frame da cui raccogliere informazioni temporali.\par
+Il problema dovuto al device riguardo la perdita di visibilit\'e0 non \'e8 ovviamente risolvibile a livello hardware, per cui \'e8 stato ritenuto necessario implementare un modello che prevedesse la scomparsa e ricomparsa dello stesso oggetto entro un certo tempo, fissato a 0,2 secondi.\par
+Leap Driver funge da Controller e da Listener del sensore, ovvero implementa i comportamenti da adottare alla ricezione dei dati e si occupa di invocarne gli handler. In particolare, il driver delega due istanze (chiamate \i ClonableHandCleaner \i0 e \i ClonablePointableCleaner\i0 ) per la gestione dei dati in ricezione dal sensore, per la memorizzazione dello stato temporale e della tabella di corrispondenza degli ID, e per la notifica degli eventi verso le altre applicazioni. Questi eventi, di tipo \i SensorEventArgs\i0 , sono necessari alle applicazioni che utilizzeranno il driver proprio perch\'e9 rappresentano lo stato del mondo in quell'istante, e sono resi di facile comprensione grazie alla loro costruzione. Contengono infatti:\par
+- un dato di tipo \i LeapFeatureType\i0 , che indica quale mano/pointable sta comparendo, muovendo o scomparendo nella vista;\par
+- un oggetto di tipo LeapEventArgs, contenente l'ID dell'oggetto a cui la feature si riferisce, e lo stato del mondo in quell'istante. Ci\'f2 implica che, per un oggetto ClonableFrame con lo stesso timestamp, possano essere sollevati diversi eventi a seconda di quello che succede durante l'esecuzione.\par
+Il loro comportamento pu\'f2 essere analizzato in questo modo:\par
+1) alla ricezione dei dati, la prima cosa che viene fatta \'e8 la pulizia della storia, ovvero i cleaner cancellano ognuno dalle proprie liste i frame che risultano pi\'f9 vecchi di 0,2 secondi fa. Per ogni mano o pointable da eliminare, viene notificato un evento di tipo NotActiveHand, NotActiveFinger o NotActivePointable.\par
+Il problema degli ID \'e8 stato risolto mantenendo nello stato una corrispondenza univoca tra ID provenienti dal Leap e ID detti "fake", ovvero creati ad-hoc dal driver, e che saranno poi quelli comunicati alle applicazioni interessante. Questi ID fake sono rappresentati dal tipo \i object\i0 , che ne garantisce l'univocit\'e0 in ogni momento.\par
+///////////////// DISEGNO FUNZIONAMENTO MAPID?\par
+\par
+
+\pard\sa200\sl276\slmult1\qj\par
+}
+ 

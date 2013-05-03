@@ -183,14 +183,16 @@ module MenuWin8
             closehandframe (x.Frame)
 
         let keepclosed (x:LeapEventArgs) =
-                let latestFrames =
-                    frameQueue
-                    |> Seq.filter (fun y -> y.Timestamp >= x.Frame.Timestamp - 100000L)
-                if Seq.length latestFrames = 0 then
-                    false
-                else
+            let latestFrames =
+                frameQueue
+                |> Seq.filter (fun y -> y.Timestamp >= x.Frame.Timestamp - 100000L)
+            if Seq.length latestFrames = 0 then
+                false
+            else
+                let c =
                     latestFrames
                     |> Seq.forall (fun y -> y.HandList.ContainsKey(x.Id) && (closehandframe y) )
+                c
 
         let timedevent p refts thresh (x:LeapEventArgs) =
             let f = x.Frame
@@ -232,27 +234,28 @@ module MenuWin8
         let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefingerdown)
         let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
 
-        // batti le mani
+//        // batti le mani
         let activehands = new GroundTerm<_,_>(LeapFeatureTypes.ActiveHand, activehand 2)
         let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehand 0) // mano a dx (non importa quale)
         let movedhandleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehand 1)  // mano a sx (idem)
         let handsareclose = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, areclose)
         let nothand = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveHand, p)
 
-        let s1 = new Sequence<_,_>(openedhand1, closedhand1, keepclosedhand)
-        let net1 = s1.ToGestureNet(s)
+        let s1 = new Sequence<_,_>((*openedhand1, closedhand1*) closedhand2, keepclosedhand) // chiudi (tenendo chiusa mano)
 
-        let s2 = new Sequence<_,_>(closedhand2, openedhand2)
+        let s2 = new Sequence<_,_>(closedhand2, openedhand2) // apri
+
         let iterr = new Iter<_,_>(movedfingerright)
         let iterl = new Iter<_,_>(movedfingerleft)
         let iteru = new Iter<_,_>(movedfingerup)
         let iterd = new Iter<_,_>(movedfingerdown)
         let ch1 = new Choice<_,_>(iterr, iterl, iteru, iterd)
-    
-        let s22 = new Sequence<_,_>(s2, ch1)
         let ch2 = new Choice<_,_>(pushedhanddown, s1)
-        let s222 = new Choice<_,_>(s22, ch2)
-        let net222 = s222.ToGestureNet(s)
+    
+        let ch3 = new Choice<_,_>(ch1, ch2)
+        let s22 = new Sequence<_,_>(s2, ch3)
+        let net222 = s22.ToGestureNet(s)
+
 
         let par = new Parallel<_,_>(movedhandleft, movedhandright)
         let iterpar = new Iter<_,_>(par)
@@ -260,16 +263,14 @@ module MenuWin8
         let choi1 = new Choice<_,_>(handsareclose, nothand)
         let choi2 = new Choice<_,_>(sequ, choi1)
         let netclaphands = choi2.ToGestureNet(s)
-//        let imove = new Iter<_,_>(movedhandright)
-//        let ichoice = new Choice<_,_>(imove, nothand)
-//        let net3 = ichoice.ToGestureNet(s)
+
 
         (* PROVA PAINT *)
-        let mf = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
-        let naf = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, p)
-        let i = new Iter<_,_>(mf)
-        let c = new Choice<_,_>(i, naf)
-        let netpaint = c.ToGestureNet(s)
+////        let mf = new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, p)
+////        let naf = new GroundTerm<_,_>(LeapFeatureTypes.NotActiveFinger, p)
+////        let i = new Iter<_,_>(mf)
+////        let c = new Choice<_,_>(i, naf)
+////        let netpaint = c.ToGestureNet(s)
 
         do
             trayMenu <- new ContextMenu()
@@ -322,7 +323,6 @@ module MenuWin8
                 else
                     (* update frame informations *)
                     UpdateInformations(f, e.FeatureType, id)
-                    openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             )
             let initializeTrashes =
                 threshpointfingerup <- thresh                
@@ -331,8 +331,9 @@ module MenuWin8
                 threshpointfingerright <- thresh
 
             s1.Gesture.Add(fun _ -> SendKeys.SendWait("{ESC}")) // close menu
+            openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
             closedhand2.Gesture.Add(fun (sender,e) -> ts_closedhand := e.Event.Frame.Timestamp)
-            s2.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("^{ESC}")) // open menu
+            s2.Gesture.Add(fun (sender,e) -> Debug.WriteLine("TS menu: {0}", e.Event.Frame.Timestamp); SendKeys.SendWait("^{ESC}")) // open menu
             iterr.Gesture.Add(fun (sender,e) -> threshpointfingerdown <- thresh
                                                 threshpointfingerleft <- thresh
                                                 threshpointfingerup <- thresh
@@ -362,10 +363,10 @@ module MenuWin8
                                                 if t > 0L then threshpointfingerdown <- t;
                                                 lastFingerDown <- e.Event.Frame.Timestamp
                                                 SendKeys.SendWait("{DOWN 1}"))
-            s222.Gesture.Add(fun (sender,e) -> initializeTrashes
-                                               lastEnter <- e.Event.Frame.Timestamp
-                                               SendKeys.SendWait("{ENTER}"))
-
+            pushedhanddown.Gesture.Add(fun (sender,e) -> initializeTrashes
+                                                         Debug.WriteLine("PUSH!")
+                                                         lastEnter <- e.Event.Frame.Timestamp
+                                                         SendKeys.SendWait("{ENTER}"))
             trayIcon.MouseDoubleClick.Add(fun _ ->
                                             if x.Visible = true then
                                                 x.Visible <- false
@@ -373,14 +374,14 @@ module MenuWin8
                                                 x.Visible <- true
                                             x.Invalidate()
                                     )
-//            movedhandright.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("^+{ESC}") )
             (* PROVA PAINT *)
-            mf.Gesture.Add(fun (sender,e) -> point <- new Point((int)e.Event.Frame.PointableList.[e.Event.Id].Position.x, (int)e.Event.Frame.PointableList.[e.Event.Id].Position.y)
-                                             lbl.Invoke(deleg) |> ignore
-                                             lbl.Invalidate()
-                                             x.Invalidate())
-            nothand.Gesture.Add(fun (sender,e) -> Debug.WriteLine("Mano scomparsa..."))
+////            mf.Gesture.Add(fun (sender,e) -> point <- new Point((int)e.Event.Frame.PointableList.[e.Event.Id].Position.x, (int)e.Event.Frame.PointableList.[e.Event.Id].Position.y)
+////                                             lbl.Invoke(deleg) |> ignore
+////                                             lbl.Invalidate()
+////                                             x.Invalidate())
+////            nothand.Gesture.Add(fun (sender,e) -> Debug.WriteLine("Mano scomparsa..."))
             handsareclose.Gesture.Add(fun (sender,e) -> Debug.WriteLine("n hands: {0}", e.Event.Frame.HandList.Count); SendKeys.SendWait("^+{ESC}"))
+       
         override x.OnPaint(e:PaintEventArgs) =
             let g = e.Graphics
             pointScreen.X <- point.X + System.Windows.Forms.Screen.PrimaryScreen.Bounds.Width / 2
