@@ -371,6 +371,7 @@ namespace LeapDriver
         interface ISensor<LeapFeatureTypes,LeapEventArgs> with
             [<CLIEvent>]
             member x.SensorEvents = sensorEvent.Publish
+
         override this.OnInit(c:Controller) =
             System.Console.WriteLine "OnInit"
         override this.OnConnect(c:Controller) =

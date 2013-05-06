@@ -41,7 +41,7 @@
     <Compile Include="GestIT_Library.fs" />
     <Compile Include="ClonableFrame.fs" />
     <Compile Include="Driver.fs" />
-    <Compile Include="NewModel.fs" />
+    <Compile Include="PlaybackSensor.fs" />
     <None Include="LeapCSharp.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
@@ -51,6 +51,8 @@
     <None Include="Leap.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="TestSerialization.fsx" />
+    <Compile Include="File1.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.Core, Version=4.3.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">

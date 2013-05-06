@@ -5,14 +5,21 @@ namespace ClonableLeapFrame
 
     open Leap
     open System.Collections.Generic
-
+    open System.Runtime.Serialization
+    open System.Security.Permissions
     /// <summary>
     /// Representation of ids.
     /// </summary>
     [<AllowNullLiteralAttribute>]
     type FakeId () =
-        class
-        end
+        let mutable id = System.Guid.Empty
+        do
+          id <- System.Guid.NewGuid()   // http://it.wikipedia.org/wiki/GUID
+        member x.ID with get() = id
+        override x.Equals o =
+          match o with
+          | :? FakeId as oo -> x.ID.Equals(oo.ID)
+          | _ -> false
 
     /// typeparam name="TimeStamp">
     /// Defines a generic type of timestamp.
@@ -31,16 +38,44 @@ namespace ClonableLeapFrame
     /// <param name="tool">A boolean representing if Pointable is a tool.</param>
     /// <param name="l">Length of Pointable.</param>
     /// <param name="w">Width of Pointable.</param>
-    type ClonablePointable (i:FakeId, ih:FakeId, d:Vector, p:Vector, v:Vector, finger:bool, tool:bool, l:float32, w:float32) =
+    [<System.Serializable>]
+    type ClonablePointable (id:FakeId, ih:FakeId, d:Vector, p:Vector, v:Vector, isFinger:bool, isTool:bool, length:float32, width:float32) =
         let mutable direction = new Vector(d)
         let mutable position = new Vector(p)
         let mutable velocity = new Vector(v)
-        let id = i
         let mutable idHand = ih
-        let isFinger = finger
-        let isTool = tool
-        let length = l
-        let width = w
+
+        interface ISerializable with
+            [<SecurityPermissionAttribute(SecurityAction.Demand,SerializationFormatter=true)>]
+            member x.GetObjectData(info:SerializationInfo, context:StreamingContext) =
+                info.AddValue("id", id)
+                info.AddValue("idHand", idHand)
+                info.AddValue("isFinger", isFinger)
+                info.AddValue("isTool", isTool)
+                info.AddValue("length", length)
+                info.AddValue("width", width)
+                info.AddValue("d.x", direction.x)
+                info.AddValue("d.y", direction.y)
+                info.AddValue("d.z", direction.z)
+                info.AddValue("p.x", position.x)
+                info.AddValue("p.y", position.y)
+                info.AddValue("p.z", position.z)
+                info.AddValue("v.x", velocity.x)
+                info.AddValue("v.y", velocity.y)
+                info.AddValue("v.z", velocity.z)
+
+        new (info:SerializationInfo, context:StreamingContext) =
+            let id = info.GetValue("id", typeof<FakeId>) :?> FakeId
+            let idhand = info.GetValue("idHand", typeof<FakeId>)  :?> FakeId
+            let isfinger = info.GetBoolean("isFinger")
+            let isTool = info.GetBoolean("isTool")
+            let length = info.GetSingle("length")
+            let width = info.GetSingle("width")
+            let direction = new Vector(info.GetSingle("d.x"), info.GetSingle("d.y"), info.GetSingle("d.z"))
+            let position = new Vector(info.GetSingle("p.x"), info.GetSingle("p.y"), info.GetSingle("p.z"))
+            let velocity = new Vector(info.GetSingle("v.x"), info.GetSingle("v.y"), info.GetSingle("v.z"))
+            ClonablePointable(id, idhand, direction, position, velocity, isfinger, isTool, length, width)
+
         /// <summary>
         /// Get or set direction property.
         /// </summary>
@@ -82,6 +117,7 @@ namespace ClonableLeapFrame
     /// <param name="n">A Vector perpendicular to the plane formed by the palm of the hand.</param>
     /// <param name="c">A Vector representing the center of the sphere.</param>
     /// <param name="r">The radius of the sphere.</param> 
+    [<System.Serializable>]
     type ClonableHand (i:FakeId, d:Vector, p:Vector, v:Vector, n:Vector, c:Vector, r:float32) =
         let mutable direction = new Vector(d)
         let mutable position = new Vector(p)
@@ -90,6 +126,38 @@ namespace ClonableLeapFrame
         let sphereCenter = new Vector(c)
         let sphereRadius = r
         let id = i
+
+        interface ISerializable with
+            [<SecurityPermissionAttribute(SecurityAction.Demand,SerializationFormatter=true)>]
+            member x.GetObjectData(info:SerializationInfo, context:StreamingContext) =
+                info.AddValue("id", id)
+                info.AddValue("sr", sphereRadius)
+                info.AddValue("n.x", normal.x)
+                info.AddValue("n.y", normal.y)
+                info.AddValue("n.z", normal.z)
+                info.AddValue("sc.x", sphereCenter.x)
+                info.AddValue("sc.y", sphereCenter.y)
+                info.AddValue("sc.z", sphereCenter.z)
+                info.AddValue("d.x", direction.x)
+                info.AddValue("d.y", direction.y)
+                info.AddValue("d.z", direction.z)
+                info.AddValue("p.x", position.x)
+                info.AddValue("p.y", position.y)
+                info.AddValue("p.z", position.z)
+                info.AddValue("v.x", velocity.x)
+                info.AddValue("v.y", velocity.y)
+                info.AddValue("v.z", velocity.z)
+
+        new (info:SerializationInfo, context:StreamingContext) =
+            let id = info.GetValue("id", typeof<FakeId>) :?> FakeId
+            let spRad = info.GetSingle("sr")
+            let normal = new Vector(info.GetSingle("n.x"), info.GetSingle("n.y"), info.GetSingle("n.z"))
+            let spCen = new Vector(info.GetSingle("sc.x"), info.GetSingle("sc.y"), info.GetSingle("sc.z"))
+            let direction = new Vector(info.GetSingle("d.x"), info.GetSingle("d.y"), info.GetSingle("d.z"))
+            let position = new Vector(info.GetSingle("p.x"), info.GetSingle("p.y"), info.GetSingle("p.z"))
+            let velocity = new Vector(info.GetSingle("v.x"), info.GetSingle("v.y"), info.GetSingle("v.z"))
+            ClonableHand(id, direction, position, velocity, normal, spCen, spRad)
+
         /// <summary>
         /// Get or set direction property.
         /// </summary>

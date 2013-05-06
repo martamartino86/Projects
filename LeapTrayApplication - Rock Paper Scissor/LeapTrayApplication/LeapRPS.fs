@@ -8,6 +8,7 @@ module RockPaperScissor
     open GestIT
     open ClonableLeapFrame
     open LeapDriver
+    open System.IO
     
     type Delegate = delegate of string -> unit
 
@@ -18,10 +19,32 @@ module RockPaperScissor
 
     type TrayApplication () as this =
         inherit Form()
-        let lbl = new Label()
 
-        (* Structures *)
+        let lbl = new Label()
+        let btn = new Button()
+
+        do
+            this.BackColor <- Color.PeachPuff
+            this.MaximizeBox <- false
+            this.FormBorderStyle <- FormBorderStyle.FixedSingle
+            lbl.Visible <- true
+            lbl.Width <- 200
+            lbl.Height <- 50
+            lbl.Location <- new Point(this.Location.X + this.Width / 2 - lbl.Width / 2, this.Location.Y + this.Height / 2 - lbl.Height / 2)
+            lbl.Font <- new Font("Verdana", 10.F)
+            lbl.Text <- "* ROCK PAPER SCISSOR *"
+            this.Controls.Add(lbl)
+//            btn.Location <- new Point(10, 10)
+//            btn.Click.Add(fun e -> SwitchStream())
+//            this.Controls.Add(btn)
+
+
+        (* Structures for debug-code *)
+        let outf = @"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - Rock Paper Scissor\LeapTrayApplication\output.ser"
+        let mutable (f:FileStream) = null
+//        let pbs = new GestIT.PlaybackSensor<_,_>(f) // useless until you wanna debug info on file
         let s = new LeapDriver.LeapSensor()
+        (* Structures *)
         let frameQueue = new Queue<ClonableFrame>()
         let mutable lastFrameInQueue = new ClonableFrame() // it represents the last enqueued frame
         let vectorX = new Leap.Vector((float32)1, (float32)0, (float32)0)
@@ -44,18 +67,6 @@ module RockPaperScissor
         let mutable minX_glob = new ClonableFrame()
         let mutable maxY_glob = new ClonableFrame()
         let mutable nVariations = 0
-
-        do
-            this.BackColor <- Color.PeachPuff
-            this.MaximizeBox <- false
-            this.FormBorderStyle <- FormBorderStyle.FixedSingle
-            lbl.Visible <- true
-            lbl.Width <- 200
-            lbl.Height <- 50
-            lbl.Location <- new Point(this.Location.X + this.Width / 2 - lbl.Width / 2, this.Location.Y + this.Height / 2 - lbl.Height / 2)
-            lbl.Font <- new Font("Verdana", 10.F)
-            lbl.Text <- "* ROCK PAPER SCISSOR *"
-            this.Controls.Add(lbl)
 
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
@@ -108,23 +119,6 @@ module RockPaperScissor
                 || (lastHandLeft >= f.Timestamp - 750000L) then
                     false
             else
-                (*
-                    let l =
-                        frameQueue
-                        |> Seq.pairwise
-                        |> Seq.filter (fun (f1,f2) ->
-                            let p1 = f1.HandList.[id].Position
-                            let p2 = f2.HandList.[id].Position
-                            let delta_s = System.Math.Abs(p2.x - p1.x)
-                            let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
-                            let v_m = (delta_s / delta_t) * 1000000.f
-                            (p2.x <= p1.x) && (v_m >= 0.4f)
-                        )
-                        |> Seq.length
-                    let thresh = int(float(frameQueue.Count) * 0.7)
-                    l > thresh
-            exists
-            *)
                 let coda =
                     frameQueue
                     |> Seq.filter (fun y -> y.Timestamp >= f.Timestamp - 150000L)
@@ -432,6 +426,14 @@ module RockPaperScissor
         let oscillations = new Parallel<_,_>(movedhandright, movedhandleft)
         let s1 = new Sequence<_,_>(oscillations, movedhanddown)
         let net = s1.ToGestureNet(s)
+        (* NET for debugging (pbs reads leap input from a file) *)
+//        let net = s1.ToGestureNet(pbs)
+        let SetStreamNet =
+            if net.Stream = null then
+                f <- File.OpenWrite(outf)
+                net.Stream <- f
+                Debug.WriteLine("n.Stream = " + net.Stream.ToString())
+            if net.Stream <> null then Debug.WriteLine("... non sei null!!")
 
         (* Sensor *)
         let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
@@ -469,7 +471,7 @@ module RockPaperScissor
                 else
                     (* update frame informations *)
                     UpdateInformations(f, e.FeatureType, id)
-                    //openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
+                Debug.WriteLine("CUCCURUCCU {0}", net.Stream)
             )
             movedhandright.Gesture.Add(fun (sender,e) -> lastHandRight <- e.Event.Frame.Timestamp
                                                          lbl.Invoke(deleg, "... ~~> THINKING ~~> ...") |> ignore
@@ -515,6 +517,8 @@ module RockPaperScissor
             )
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
+            (* Closing file for DEBUG *)
+            f.Close()
             Application.Exit()
 
     [<EntryPoint; System.STAThread>]

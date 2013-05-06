@@ -6,6 +6,18 @@ module Program
     open GestIT
     open ClonableLeapFrame
     open LeapDriver
+    open System.IO
+
+    type Puppa (fileName:string) =
+      let f = (File.Open(fileName, FileMode.Create, FileAccess.Write))
+      let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
+      
+      member x.Write(e:SensorEventArgs<LeapFeatureTypes, LeapEventArgs>) =
+        if f.CanWrite then formatter.Serialize(f, (System.DateTime.Now, e.FeatureType, e.Event))
+        
+      interface System.IDisposable with
+        member x.Dispose () = f.Close()
+
     
     (* Structures *)
     let s = new LeapDriver.LeapSensor()
@@ -193,7 +205,12 @@ module Program
     let pp3 = new Parallel<_,LeapEventArgs>(muovogiu1, muovogiu1)
 
     let ch = new Choice<_,_>(seq, perdomano)
+
+    let ff = new Puppa(@"C:\Users\Pc\Desktop\output.ser")
+    //let f = (File.OpenWrite(@"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - Rock Paper Scissor\LeapTrayApplication\output.ser"))
     let net = ch.ToGestureNet(s)
+    //net.Stream <- f
+    printfn "NET HASHCODE: %A" (net.GetHashCode())
 
     vedomani1.Gesture.Add(fun (sender,e) -> printfn ("vedo 2 mani"); queueIDs.Add(e.Event.Id))
     c1.Gesture.Add(fun (sender,e) -> printfn("~ ciao ciao! "))
@@ -211,7 +228,13 @@ module Program
             | LeapFeatureTypes.NotActiveFinger | LeapFeatureTypes.NotActiveTool -> lastFrameInQueue.PointableList.Remove(id) |> ignore
             | _ -> ()
 
+    let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
+
     (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
+        
+        ff.Write(e)
+
+        Debug.WriteLine("ricevo dati; net = {0}", net)
         (* Removing too old frames *)
         let t = e.Event.Frame.Timestamp
         while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
