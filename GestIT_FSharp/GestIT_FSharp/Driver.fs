@@ -364,13 +364,24 @@ namespace LeapDriver
 
         let sensorEvent = new Event<SensorEventArgs<LeapFeatureTypes, LeapEventArgs>>()
 
+        let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
+        let mutable outputStream : System.IO.Stream = null
+
         do
             ctrl.AddListener(this) |> ignore
+
+        member this.OutputStream
+            with get() = outputStream
+            and set(v) = outputStream <- v
 
         member this.Controller = ctrl
         interface ISensor<LeapFeatureTypes,LeapEventArgs> with
             [<CLIEvent>]
             member x.SensorEvents = sensorEvent.Publish
+
+        member private this.MyTrigger t e =
+            if this.OutputStream <> null then formatter.Serialize(this.OutputStream, (System.DateTime.Now, t, e)) 
+            sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
 
         override this.OnInit(c:Controller) =
             System.Console.WriteLine "OnInit"
@@ -385,12 +396,12 @@ namespace LeapDriver
             pointableCleaner.TruncateHistory (fun pointable ->
                                                 let e = new LeapEventArgs(state, pointable.Id)
                                                 let t = if pointable.IsFinger then LeapFeatureTypes.NotActiveFinger else LeapFeatureTypes.NotActiveTool
-                                                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+                                                this.MyTrigger t e
                 ) (currenttimestamp - zombieWindow)
 
             handCleaner.TruncateHistory (fun hand ->
                                                 let e = new LeapEventArgs(state, hand.Id)
-                                                sensorEvent.Trigger(new SensorEventArgs<_,_>(LeapFeatureTypes.NotActiveHand, e))
+                                                this.MyTrigger LeapFeatureTypes.NotActiveHand e
                 ) (currenttimestamp - zombieWindow)
 
             handCleaner.Predict(currenttimestamp)
@@ -401,7 +412,7 @@ namespace LeapDriver
                 match handCleaner.TryUpdate(h) with
                 | Some hand ->
                     let e = new LeapEventArgs(state,hand.Id)
-                    sensorEvent.Trigger(new SensorEventArgs<_,_>(LeapFeatureTypes.MoveHand, e))
+                    this.MyTrigger LeapFeatureTypes.MoveHand e
                 | None -> unmatched <- h::unmatched
 
             for h in unmatched do
@@ -410,7 +421,7 @@ namespace LeapDriver
                     | Some hand -> hand,LeapFeatureTypes.MoveHand
                     | None -> handCleaner.Extend(h),LeapFeatureTypes.ActiveHand
                 let e = new LeapEventArgs(state,hand.Id)
-                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+                this.MyTrigger t e
 
             let mutable unmatched = []
             for p in frame.Pointables do
@@ -418,7 +429,7 @@ namespace LeapDriver
                 | Some pointable ->
                     let t = if pointable.IsFinger then LeapFeatureTypes.MoveFinger else LeapFeatureTypes.MoveTool
                     let e = new LeapEventArgs(state,pointable.Id)
-                    sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+                    this.MyTrigger t e
                 | None -> unmatched <- p::unmatched
 
             for p in unmatched do
@@ -432,7 +443,7 @@ namespace LeapDriver
                         let t = if pointable.IsFinger then LeapFeatureTypes.ActiveFinger else LeapFeatureTypes.ActiveTool
                         pointable,t
                 let e = new LeapEventArgs(state,pointable.Id)
-                sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
+                this.MyTrigger t e
 
         override this.OnDisconnect(c:Controller) =
             System.Console.WriteLine "OnDisconnect"

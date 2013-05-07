@@ -23,6 +23,10 @@ module RockPaperScissor
         let lbl = new Label()
         let btn = new Button()
 
+        (* Structures for debug-code *)
+        let mutable ss : ISensor<LeapFeatureTypes,LeapEventArgs> option = None
+        let readFromFile = true // when false, you can decide to REGISTER gestures or JUST HAVING SO MUCH FUN WITH LEAP... (vedi <~~~ ~~~ ~~~ ~~~ ~~~ )
+
         do
             this.BackColor <- Color.PeachPuff
             this.MaximizeBox <- false
@@ -35,13 +39,16 @@ module RockPaperScissor
             lbl.Text <- "* ROCK PAPER SCISSOR *"
             this.Controls.Add(lbl)
 
-        (* Structures for debug-code *)
-        let outf = @"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - Rock Paper Scissor\LeapTrayApplication\output.ser"
-        let mutable (f:FileStream) = null//File.Open(outf, FileMode.Create, FileAccess.Write)
-        let mutable (f2:FileStream) = File.OpenRead(outf)
-        let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
-        let pbs = new GestIT.PlaybackSensor<_,_>(f2) // useless until you wanna debug info on file
-        let s = new LeapDriver.LeapSensor()
+            let outf = @"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - Rock Paper Scissor\LeapTrayApplication\output.ser"
+            if readFromFile then
+              let f = File.OpenRead(outf)
+              ss <- Some(new GestIT.PlaybackSensor<LeapFeatureTypes,LeapEventArgs>(f) :> ISensor<LeapFeatureTypes,LeapEventArgs>)
+            else
+              let s = new LeapDriver.LeapSensor()
+              ss <- Some(s :> ISensor<LeapFeatureTypes,LeapEventArgs>)
+              s.OutputStream <- File.Open(outf, FileMode.Create, FileAccess.Write) // <~~~ ~~~ ~~~ ~~~ ~~~ ~~~ 
+
+
         (* Structures *)
         let frameQueue = new Queue<ClonableFrame>()
         let mutable lastFrameInQueue = new ClonableFrame() // it represents the last enqueued frame
@@ -428,7 +435,7 @@ module RockPaperScissor
         let s1 = new Sequence<_,_>(oscillations, movedhanddown)
 //        let net = s1.ToGestureNet(s)
         (* NET for debugging (pbs reads leap input from a file) *)
-        let net = s1.ToGestureNet(pbs)
+        let net = s1.ToGestureNet(ss.Value)
 
         (* Sensor *)
         let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
@@ -450,8 +457,7 @@ module RockPaperScissor
         override x.OnLoad(e:System.EventArgs) =
             x.Visible <- true
             x.ShowInTaskbar <- true // Remove from taskbar.
-            (pbs :> ISensor<_,_>).SensorEvents.Add(fun e ->
-                if f <> null then formatter.Serialize(f, (System.DateTime.Now, e.FeatureType, e.Event))
+            ss.Value.SensorEvents.Add(fun e ->
                 (* Removing too old frames *)
                 let t = e.Event.Frame.Timestamp
                 while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
@@ -459,7 +465,6 @@ module RockPaperScissor
                 (* Receiving updates from sensor *)
                 let f = e.Event.Frame
                 let id = e.Event.Id
-                Debug.WriteLine("{0} {1}", lastFrameInQueue.Timestamp, f.Timestamp)
                 if lastFrameInQueue.Timestamp <> f.Timestamp then
                     (* in this case, surely lastFrame.TS < f.TS, so it has to be added to the queue *)
                     let newFrame = f.Clone()
@@ -512,13 +517,24 @@ module RockPaperScissor
                                                         lbl.Invalidate()
             
             )
-            pbs.start()
+            match ss with
+            | Some(x) -> match x with | :? PlaybackSensor<LeapFeatureTypes,LeapEventArgs> as y -> y.start() | _ -> ()
+            | _ -> ()
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
             (* Closing file for DEBUG *)
-            if f <> null then f.Close()
-            if f2 <> null then f2.Close()
+            match ss with
+            | Some(x) -> match x with
+                         | :? LeapDriver.LeapSensor as y ->
+                                                            if y.OutputStream <> null then
+                                                                let f = y.OutputStream
+                                                                y.OutputStream <- null
+                                                                f.Close()
+                         | _ -> ()
+            | _ -> ()
+
             Application.Exit()
+
 
     [<EntryPoint; System.STAThread>]
     let main argv = 
