@@ -38,24 +38,12 @@ type Token () =
 [<AbstractClass>]
 type GestureNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   let completionEvent = new Event<SensorEventArgs<'T,'U> * seq<Token>>()
-  let mutable (stream:System.IO.FileStream) = null
-  let mutable (formatter:System.Runtime.Serialization.Formatters.Binary.BinaryFormatter) = null
 
   member this.Completed(e,t) = completionEvent.Trigger(e,t)
   member this.Completion = completionEvent.Publish
   abstract member Front: GestureNet<'T,'U> list
   abstract member AddTokens: Token seq -> unit
   abstract member RemoveTokens: Token seq -> unit
-
-  member this.Formatter
-    with get() = formatter
-
-  member this.Stream
-    with get() = stream
-    and set(v) = 
-      stream <- v
-      Debug.WriteLine("modificato stream: {0}", stream)
-      formatter <- new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
 
 /// <summary>
 /// It represents the gesture expression, which has to be transformed into a GestureNet for allowing the token transition.
@@ -78,7 +66,6 @@ type GestureExpr<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
     for subn in net.Front do
       subn.Completion.Add(fun _ -> net.AddTokens([new Token()]))
     net.AddTokens([new Token()])
-    Debug.WriteLine("*** CREATA RETE ***")
     net
 
 /// <summary>
@@ -111,13 +98,7 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
       handler.Dispose()
       handler <- null
 
-  let writeEvent(event:SensorEventArgs<'T,'U>) =
-    this.Formatter.Serialize(this.Stream, (System.DateTime.Now, event.FeatureType, event.Event))
-    Debug.WriteLine("wrote on file")
-
   let handle (event:SensorEventArgs<'T,'U>) =
-    //printfn "this (handle): %A" (this.GetHashCode())
-    //if this.Stream <> null then writeEvent(event)
     if (exp.Feature :> System.Enum).Equals(event.FeatureType) then
       let p =
         match exp.Predicate with
@@ -128,7 +109,7 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
         tokens <- new System.Collections.Generic.HashSet<Token>()
         clearHandler()
         this.Completed(event,oldtokens)
-
+  
   override this.Front = [this]
 
   override this.AddTokens(ts) =

@@ -2,6 +2,7 @@
 // Per ulteriori informazioni, vedere il progetto 'Esercitazione su F#'.
 module MenuWin8
     open System.Windows.Forms
+    open System.IO
     open System.Drawing
     open System.Collections.Generic
     open System.Diagnostics
@@ -21,6 +22,12 @@ module MenuWin8
 
         let mutable trayMenu = null
         let mutable trayIcon = null
+
+        let outf = @"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - menu Win8\output.ser"
+        let mutable (f:FileStream) = null//File.Open(outf, FileMode.Create, FileAccess.Write)
+        let mutable (f2:FileStream) = File.OpenRead(outf)
+        let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
+        let pbs = new GestIT.PlaybackSensor<_,_>(f2) // useless until you wanna debug info on file
         (* Structures *)
         let s = new LeapDriver.LeapSensor()
         let frameQueue = new Queue<ClonableFrame>()
@@ -174,9 +181,11 @@ module MenuWin8
 
         let openhand (x:LeapEventArgs) =
             let f = x.Frame
+            Debug.WriteLine("CLOSEHAND: {0} {1}", (f.HandList.Count = 1), (f.PointableList.Count >= 4))
             f.HandList.Count = 1 && f.PointableList.Count >= 4
 
         let closehandframe (f:ClonableFrame) =
+            Debug.WriteLine("CLOSEHAND: {0} {1}", (f.HandList.Count = 1), (f.PointableList.Count <= 1))
             f.HandList.Count = 1 && f.PointableList.Count <= 1
 
         let closehand (x:LeapEventArgs) =
@@ -252,14 +261,15 @@ module MenuWin8
     
         let ch3 = new Choice<_,_>(ch1, ch2)
         let s22 = new Sequence<_,_>(s2, ch3)
-        let net222 = s22.ToGestureNet(s)
+        let net222 = s22.ToGestureNet(pbs)
 
         let par = new Parallel<_,_>(movedhandleft, movedhandright)
         let iterpar = new Iter<_,_>(par)
         let sequ = new Sequence<_,_>(activehands, iterpar)
         let choi1 = new Choice<_,_>(handsareclose, nothand)
         let choi2 = new Choice<_,_>(sequ, choi1)
-        let netclaphands = choi2.ToGestureNet(s)
+//        let netclaphands = choi2.ToGestureNet(s)
+        let netclaphands = choi2.ToGestureNet(pbs)
 
 
         (* PROVA PAINT *)
@@ -304,7 +314,8 @@ module MenuWin8
             x.Visible <- false
             trayIcon.Visible <- true
             x.ShowInTaskbar <- false; // Remove from taskbar.
-            (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
+            (pbs :> ISensor<_,_>).SensorEvents.Add(fun e ->
+                if f <> null then formatter.Serialize(f, (System.DateTime.Now, e.FeatureType, e.Event))
                 (* Removing too old frames *)
                 let t = e.Event.Frame.Timestamp
                 while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
@@ -378,6 +389,7 @@ module MenuWin8
 ////                                             x.Invalidate())
 ////            nothand.Gesture.Add(fun (sender,e) -> Debug.WriteLine("Mano scomparsa..."))
             handsareclose.Gesture.Add(fun (sender,e) -> Debug.WriteLine("n hands: {0}", e.Event.Frame.HandList.Count); SendKeys.SendWait("^+{ESC}"))
+            pbs.start()
        
         override x.OnPaint(e:PaintEventArgs) =
             let g = e.Graphics

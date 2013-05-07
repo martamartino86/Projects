@@ -12,7 +12,9 @@ let f = File.OpenWrite(outf)
 let formatter = new BinaryFormatter()
 
 let fakeid = ClonableLeapFrame.FakeId()
-fakeid.ID
+let dict = new System.Collections.Generic.Dictionary<ClonableLeapFrame.FakeId, ClonableLeapFrame.ClonableHand>()
+dict.[fakeid] <- new ClonableLeapFrame.ClonableHand()
+dict.[fakeid]
 
 formatter.Serialize(f, (System.DateTime.Now, LeapDriver.LeapFeatureTypes.ActiveFinger, new LeapDriver.LeapEventArgs(new ClonableLeapFrame.ClonableFrame(), fakeid)))
 formatter.Serialize(f, (System.DateTime.Now, LeapDriver.LeapFeatureTypes.ActiveHand, new LeapDriver.LeapEventArgs(new ClonableLeapFrame.ClonableFrame(), ClonableLeapFrame.FakeId())))
@@ -32,10 +34,20 @@ ff.Length = ff.Position
 ff.Close()
 
 match d with
-| a,b,c -> c.Id.ID.Equals(fakeid.ID)
-
-match d with
 | a,b,c -> c.Id.Equals(fakeid)
+
+let fanculo =
+  match d with
+  | a,b,c -> c.Id
+
+fanculo.Equals(fakeid)
+fanculo = fakeid
+
+dict.ContainsKey(fakeid)
+dict.ContainsKey(fanculo)
+
+fakeid.GetHashCode()
+fanculo.GetHashCode()
 
 fakeid
 

@@ -7,6 +7,8 @@ namespace ClonableLeapFrame
     open System.Collections.Generic
     open System.Runtime.Serialization
     open System.Security.Permissions
+
+    open System.Diagnostics
     /// <summary>
     /// Representation of ids.
     /// </summary>
@@ -20,6 +22,8 @@ namespace ClonableLeapFrame
           match o with
           | :? FakeId as oo -> x.ID.Equals(oo.ID)
           | _ -> false
+        override x.GetHashCode () =
+          id.GetHashCode()
 
     /// typeparam name="TimeStamp">
     /// Defines a generic type of timestamp.
@@ -29,7 +33,7 @@ namespace ClonableLeapFrame
     /// <summary>
     /// Defines a Pointable object, which could be a finger or a tool.
     /// </summary>
-    /// <param name="i">FakeId.</param>
+    /// <param name="id">FakeId.</param>
     /// <param name="ih">FakeId of the hand to which the Pointable belongs to.</param>
     /// <param name="d">A Vector representing direction.</param>
     /// <param name="p">A Vector representing position.</param>
@@ -63,7 +67,7 @@ namespace ClonableLeapFrame
                 info.AddValue("v.x", velocity.x)
                 info.AddValue("v.y", velocity.y)
                 info.AddValue("v.z", velocity.z)
-
+        
         new (info:SerializationInfo, context:StreamingContext) =
             let id = info.GetValue("id", typeof<FakeId>) :?> FakeId
             let idhand = info.GetValue("idHand", typeof<FakeId>)  :?> FakeId

@@ -34,15 +34,13 @@ module RockPaperScissor
             lbl.Font <- new Font("Verdana", 10.F)
             lbl.Text <- "* ROCK PAPER SCISSOR *"
             this.Controls.Add(lbl)
-//            btn.Location <- new Point(10, 10)
-//            btn.Click.Add(fun e -> SwitchStream())
-//            this.Controls.Add(btn)
-
 
         (* Structures for debug-code *)
         let outf = @"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - Rock Paper Scissor\LeapTrayApplication\output.ser"
-        let mutable (f:FileStream) = null
-//        let pbs = new GestIT.PlaybackSensor<_,_>(f) // useless until you wanna debug info on file
+        let mutable (f:FileStream) = null//File.Open(outf, FileMode.Create, FileAccess.Write)
+        let mutable (f2:FileStream) = File.OpenRead(outf)
+        let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
+        let pbs = new GestIT.PlaybackSensor<_,_>(f2) // useless until you wanna debug info on file
         let s = new LeapDriver.LeapSensor()
         (* Structures *)
         let frameQueue = new Queue<ClonableFrame>()
@@ -115,6 +113,9 @@ module RockPaperScissor
         let movehandleft (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
+//            for h in f.HandList.Keys do
+//                Debug.WriteLine("hands.id.hashcode: {0}", h.GetHashCode(), h.Equals(x.Id))
+//            Debug.WriteLine("x.id.hashcode {0} ", x.Id.GetHashCode())
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
                 || (lastHandLeft >= f.Timestamp - 750000L) then
                     false
@@ -425,15 +426,9 @@ module RockPaperScissor
         (* NET for Rock Paper Scissor *)
         let oscillations = new Parallel<_,_>(movedhandright, movedhandleft)
         let s1 = new Sequence<_,_>(oscillations, movedhanddown)
-        let net = s1.ToGestureNet(s)
+//        let net = s1.ToGestureNet(s)
         (* NET for debugging (pbs reads leap input from a file) *)
-//        let net = s1.ToGestureNet(pbs)
-        let SetStreamNet =
-            if net.Stream = null then
-                f <- File.OpenWrite(outf)
-                net.Stream <- f
-                Debug.WriteLine("n.Stream = " + net.Stream.ToString())
-            if net.Stream <> null then Debug.WriteLine("... non sei null!!")
+        let net = s1.ToGestureNet(pbs)
 
         (* Sensor *)
         let UpdateInformations (f:ClonableFrame, e:LeapFeatureTypes, id:FakeId) =
@@ -455,7 +450,8 @@ module RockPaperScissor
         override x.OnLoad(e:System.EventArgs) =
             x.Visible <- true
             x.ShowInTaskbar <- true // Remove from taskbar.
-            (s :> ISensor<_,_>).SensorEvents.Add(fun e ->
+            (pbs :> ISensor<_,_>).SensorEvents.Add(fun e ->
+                if f <> null then formatter.Serialize(f, (System.DateTime.Now, e.FeatureType, e.Event))
                 (* Removing too old frames *)
                 let t = e.Event.Frame.Timestamp
                 while (frameQueue.Count > 0 && (t - frameQueue.Peek().Timestamp > (int64)250000)) do
@@ -463,6 +459,7 @@ module RockPaperScissor
                 (* Receiving updates from sensor *)
                 let f = e.Event.Frame
                 let id = e.Event.Id
+                Debug.WriteLine("{0} {1}", lastFrameInQueue.Timestamp, f.Timestamp)
                 if lastFrameInQueue.Timestamp <> f.Timestamp then
                     (* in this case, surely lastFrame.TS < f.TS, so it has to be added to the queue *)
                     let newFrame = f.Clone()
@@ -471,7 +468,6 @@ module RockPaperScissor
                 else
                     (* update frame informations *)
                     UpdateInformations(f, e.FeatureType, id)
-                Debug.WriteLine("CUCCURUCCU {0}", net.Stream)
             )
             movedhandright.Gesture.Add(fun (sender,e) -> lastHandRight <- e.Event.Frame.Timestamp
                                                          lbl.Invoke(deleg, "... ~~> THINKING ~~> ...") |> ignore
@@ -514,11 +510,14 @@ module RockPaperScissor
                                                                             | _ -> ()
                                                         | _ -> ()
                                                         lbl.Invalidate()
+            
             )
+            pbs.start()
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
             (* Closing file for DEBUG *)
-            f.Close()
+            if f <> null then f.Close()
+            if f2 <> null then f2.Close()
             Application.Exit()
 
     [<EntryPoint; System.STAThread>]
