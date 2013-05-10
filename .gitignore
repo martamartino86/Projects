@@ -3,6 +3,5 @@ TestResult
 *.dll
 */*/bin
 */*/obj
-LeapDriver
 *.psess
 *.vspx

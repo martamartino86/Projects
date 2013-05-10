@@ -1,55 +1,60 @@
-﻿namespace GestIT
+﻿/// <summary>
+/// File:   PlaybackSensor.fs
+/// Author: Marta Martino
+/// PlaybackSensor receives as input a stream. This file has be written by LeapDriver with the information about device's event.
+/// It permits to simulate the Petri's Net behaviour without the direct usage of Leap sensor, triggering events assembled from the input file.
+/// </summary>
+namespace GestIT
 
-open System.IO
-open System.Runtime.Serialization.Formatters.Binary
-open System.Threading
+    open System.IO
+    open System.Runtime.Serialization.Formatters.Binary
+    open System.Threading
 
-open System.Diagnostics
+    /// <summary>
+    /// It represent PlaybackSensor.
+    /// </summary>
+    /// <typeparam name="T">The generic 'T type is relative to the feature.</typeparam>
+    /// <typeparam name="U">The generic 'U type is the information about the event itself.</typeparam>
+    type PlaybackSensor<'T, 'U> when 'T :> System.Enum and 'U :> System.EventArgs (s:Stream) =
+      let evt = new Event<SensorEventArgs<'T,'U>>()
+      let ser = new BinaryFormatter()
 
+      /// <summary>
+      /// Deserialize stream into a tuple of three elements.
+      /// </summary>
+      let readObj () =
+        ser.Deserialize(s) :?> (System.DateTime*'T*'U)
 
-//type ProxySensor<'T, 'U> when 'T :> System.Enum and 'U :> System.EventArgs =
-//  val inputSensor : 'Z
-//
-//  new () = { inputSensor = new 'Z(
-//
-//
-type PlaybackSensor<'T, 'U> when 'T :> System.Enum and 'U :> System.EventArgs (s:Stream) =
-//  let mutable eventsRead = 0
-  let evt = new Event<SensorEventArgs<'T,'U>>()
-  let ser = new BinaryFormatter()
+      /// </member>
+      /// <member name="M:GestIT.PlaybackSensor`2.#ctor(System.IO.Stream)">
+      /// <summary>
+      /// Assigns the stream to be read.
+      /// </summary>
+      /// <param name="s"> The stream from which the sensor read information to send. </param>
+      member private x.IgnoreMe() = ()
 
-  let readObj () =
-    ser.Deserialize(s) :?> (System.DateTime*'T*'U)
-//    try ser.Deserialize(s) :?> (System.DateTime*'T*'U)
-//    finally eventsRead <- eventsRead + 1
+      /// <summary>
+      /// In starts a worker thread, which works on deserializing data and triggering events.
+      /// </summary>
+      member this.start () =
+        let worker = new Thread(fun () -> 
+          let (t, typ, ev) = readObj()
+          let mutable lastTime = t
+          evt.Trigger(new SensorEventArgs<'T, 'U>(typ, ev))
 
-  // FIXME: Potrebbe non andare sugli stream di rete...
-  let isEof () = s.Length = s.Position
+          let mutable eof = false
+          while not eof do
+            try
+              let (t, typ, ev) = readObj()
+              let dt = (t - lastTime).TotalMilliseconds
+              lastTime <- t
+              if  dt > 5. then Thread.Sleep(int dt)
+              evt.Trigger(new SensorEventArgs<'T, 'U>(typ, ev))
+            with _ -> eof <- true
+        )
+        worker.IsBackground <- true
+        worker.Start()
 
-//  member this.EventsRead with get() = eventsRead
-
-  member this.start () =
-    let worker = new Thread(fun () -> 
-      s.Position <- 0L
-      let (begint, typ, ev) = readObj()
-      let mutable lastTime = begint
-//      Debug.WriteLine("{0} {1} {2}", begint, typ.ToString(), ev.ToString())
-      evt.Trigger(new SensorEventArgs<'T, 'U>(typ, ev))
-
-      while not(isEof()) do
-        let (t, typ, ev) = readObj()
-        let dt = (t - lastTime).TotalMilliseconds
-        lastTime <- t
-        if  dt > 5. then Thread.Sleep(int dt)
-//        Debug.WriteLine("{0} {1} {2}", lastTime, typ.ToString(), ev.ToString())
-        evt.Trigger(new SensorEventArgs<'T, 'U>(typ, ev))
-//      Debug.WriteLine(sprintf "* FILE ENDED * : read %d events" this.EventsRead)
-    )
-    worker.IsBackground <- true
-    worker.Start()
-
-  interface ISensor<'T,'U> with
-    [<CLIEvent>]
-    member x.SensorEvents = evt.Publish
-
-
+      interface ISensor<'T,'U> with
+        [<CLIEvent>]
+        member x.SensorEvents = evt.Publish

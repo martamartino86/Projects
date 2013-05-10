@@ -1,15 +1,16 @@
 ﻿/// <summary>
+/// File:   Driver.fs
+/// Author: Marta Martino
 /// LeapDriver implements a model for the elaboration of LEAP's raw datas.
 /// </summary>
 namespace LeapDriver
     open System.Windows.Forms
     open System.Drawing
     open System.Collections.Generic
-    open Microsoft.FSharp.Reflection
+    open System.IO
     open ClonableLeapFrame
     open GestIT
     open Leap
-    open System.IO
 
 (*
     // KEYBOARD features that have to be notified from the sensor //
@@ -134,12 +135,15 @@ namespace LeapDriver
         /// <returns>The model representation of the new information. </returns>
         abstract member Extend: 'U -> 'T
 
-    /// typeparam name="LeapId">
+    /// <summary>
     /// Defines a generic type of Leap ID.
-    /// </typeparam>
+    /// </summary>
     type LeapId = int
-
-    type ClonableHandCleaner(s:ClonableFrame) =
+    
+    /// <summary>
+    /// ClonableHandCleaner is the cleaner that works on ClonableHand.
+    /// </summary>
+    type ClonableHandCleaner(state:ClonableFrame) =
         let debugHand = false
 
         /// <summary>
@@ -162,11 +166,18 @@ namespace LeapDriver
             let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
             (handDistance zombiehand newhand) < float32(newhand.Frame.Timestamp - zombiets) * speedError + 3.F
 
-        let state = s
         let handTimestamps = new Dictionary<LeapId, TimeStamp>()
         let leapToFake = new Dictionary<LeapId, FakeId>()
         let mutable lastTimestamp:TimeStamp = -1L
         
+        /// </member>
+        /// <member name="M:LeapDriver.ClonableHandCleaner.#ctor(ClonableLeapFrame.ClonableFrame)">
+        /// <summary>
+        /// Assigns the current initial state to the cleaner, which will be able to internally modify it.
+        /// </summary>
+        /// <param name="state">Initial state.</param>
+        member private x.IgnoreMe () = ()
+
         /// <summary>
         /// Returns the FakeId corresponding to parameter LeapId.
         /// </summary>
@@ -246,7 +257,10 @@ namespace LeapDriver
                 if debugHand then printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
                 hand
 
-    type ClonablePointableCleaner(s:ClonableFrame,hc:ClonableHandCleaner) =
+    /// <summary>
+    /// ClonablePointableCleaner is the cleaner that works on ClonablePointable.
+    /// </summary>
+    type ClonablePointableCleaner(state:ClonableFrame,handCleaner:ClonableHandCleaner) =
         let epsilon = 1000.0f * 1.5F
         let debugPtbl = false
         let fingerDistance (p1:ClonablePointable) (p2:Pointable) =
@@ -267,11 +281,18 @@ namespace LeapDriver
             (diffLength < epsilon) && (diffWidth < epsilon) &&
                 ((fingerDistance zombiePointable newPointable) < (float32(newPointable.Frame.Timestamp - zombiets) * speedError + 3.F))
 
-        let state = s
-        let handCleaner = hc
         let pointableTimestamps = new Dictionary<LeapId, TimeStamp>()
         let leapToFake = new Dictionary<LeapId, FakeId>()
         let mutable lastTimestamp:TimeStamp = -1L
+
+        /// </member>
+        /// <member name="M:LeapDriver.ClonablePointableCleaner.#ctor(ClonableLeapFrame.ClonableFrame,LeapDriver.ClonableHandCleaner)">
+        /// <summary>
+        /// Assigns the current initial state to the cleaner, which will be able to internally modify it.
+        /// </summary>
+        /// <param name="state">Initial state.</param>
+        /// <param name="handCleaner">Hand cleaner.</param>
+        member private x.IgnoreMe () = ()
 
         interface IStateCleaner<ClonablePointable,Pointable> with
             member x.TruncateHistory f t =
@@ -340,10 +361,18 @@ namespace LeapDriver
     /// <summary>
     /// Represents the event to be triggered by LeapSensor.
     /// </summary>
-    /// <param name="f">Frame containing current state informations.</param>
-    /// <param name="id">ID of the object which the frame is referred to.</param>
     type LeapEventArgs(f:ClonableFrame, id:FakeId) =
         inherit System.EventArgs()
+
+        /// </member>
+        /// <member name="M:LeapDriver.LeapEventArgs.#ctor(ClonableLeapFrame.ClonableFrame,ClonableLeapFrame.FakeId)">
+        /// <summary>
+        /// Assigns a frame and a ID to the event to be sent.
+        /// </summary>
+        /// <param name="f">Frame to be sent.</param>
+        /// <param name="id">Id to which the event is related to.</param>
+        member private this.IgnoreMe() = ()
+
         // Oggetto Frame corrente.
         member this.Frame = f
         // ID dell'oggetto a cui si riferisce la feature (es. ID di un Hand / Finger / Tool).
@@ -366,9 +395,11 @@ namespace LeapDriver
 
         let formatter = new System.Runtime.Serialization.Formatters.Binary.BinaryFormatter()
         let mutable outputStream : System.IO.Stream = null
+        let debugSensor = false
 
         do
             ctrl.AddListener(this) |> ignore
+            ctrl.SetPolicyFlags(Controller.PolicyFlag.POLICYBACKGROUNDFRAMES)
 
         member this.OutputStream
             with get() = outputStream
@@ -384,9 +415,9 @@ namespace LeapDriver
             sensorEvent.Trigger(new SensorEventArgs<_,_>(t, e))
 
         override this.OnInit(c:Controller) =
-            System.Console.WriteLine "OnInit"
+            if debugSensor then System.Diagnostics.Debug.WriteLine("OnInit")
         override this.OnConnect(c:Controller) =
-            System.Console.WriteLine "OnConnect"
+            if debugSensor then System.Diagnostics.Debug.WriteLine("OnConnect")
         override this.OnFrame(c:Controller) =
             let frame = c.Frame()
             let currenttimestamp = frame.Timestamp
@@ -446,6 +477,6 @@ namespace LeapDriver
                 this.MyTrigger t e
 
         override this.OnDisconnect(c:Controller) =
-            System.Console.WriteLine "OnDisconnect"
+            if debugSensor then System.Console.WriteLine "OnDisconnect"
         override this.OnExit (c:Controller) =
-            System.Console.WriteLine "OnExit"
+            if debugSensor then System.Console.WriteLine "OnExit"

@@ -18,7 +18,7 @@
     <Optimize>false</Optimize>
     <Tailcalls>false</Tailcalls>
     <OutputPath>bin\Debug\</OutputPath>
-    <DefineConstants>TRACE;DEBUG;TRUE</DefineConstants>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DocumentationFile>bin\Debug\LeapTrayApplication.XML</DocumentationFile>
@@ -38,26 +38,53 @@
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
   </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Record|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <Tailcalls>false</Tailcalls>
+    <DefineConstants>TRACE;DEBUG;RECORD;</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>bin\Debug\LeapTrayApplication.XML</DocumentationFile>
+    <Prefer32Bit>true</Prefer32Bit>
+    <OutputPath>bin\Record\</OutputPath>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Playback debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <Tailcalls>false</Tailcalls>
+    <DefineConstants>TRACE;DEBUG;PLAYBACK;</DefineConstants>
+    <WarningLevel>3</WarningLevel>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>bin\Debug\LeapTrayApplication.XML</DocumentationFile>
+    <Prefer32Bit>true</Prefer32Bit>
+    <OutputPath>bin\Playback debug\</OutputPath>
+  </PropertyGroup>
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildExtensionsPath32)\..\Microsoft SDKs\F#\3.0\Framework\v4.0\Microsoft.FSharp.Targets')" />
   <ItemGroup>
     <None Include="App.config" />
+    <Compile Include="LeapRPS.fs" />
     <None Include="Leap.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-    <None Include="LeapCSharp.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Include="Leapd.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
-    <Compile Include="LeapRPS.fs" />
+    <None Include="LeapCSharp.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="GestIT_FSharp">
-      <HintPath>C:\Users\Pc\Documents\Visual Studio 2012\Projects\GestIT_FSharp\GestIT_FSharp\bin\Debug\GestIT_FSharp.dll</HintPath>
+      <HintPath>..\..\GestIT_FSharp\LeapDriver\bin\Debug\GestIT_FSharp.dll</HintPath>
     </Reference>
     <Reference Include="LeapCSharp.NET3.5">
-      <HintPath>..\..\..\..\..\Desktop\Leap_Developer_Kit_0.7.6_3012_Windows\LeapSDK\lib\LeapCSharp.NET3.5.dll</HintPath>
+      <HintPath>..\..\..\..\..\Desktop\Leap_Developer_Kit_0.7.8_3421_Windows\LeapSDK\lib\LeapCSharp.NET3.5.dll</HintPath>
+    </Reference>
+    <Reference Include="LeapDriver">
+      <HintPath>..\..\GestIT_FSharp\LeapDriver\bin\Debug\LeapDriver.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core, Version=4.3.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
@@ -66,6 +93,8 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Drawing" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Numerics" />
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>

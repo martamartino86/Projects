@@ -37,8 +37,8 @@ module MenuWin8
         let vectorY = new Leap.Vector((float32)0, (float32)(-1),(float32) 0)
         let vectorZ = new Leap.Vector((float32)0, (float32)0, (float32)(-1))
         (* Timestamps *)
-        let ts_openedhand = ref(-1L : TimeStamp)
-        let ts_closedhand = ref(-1L : TimeStamp)
+        let ts_openedhand:TimeStamp ref = ref -1L
+        let ts_closedhand:TimeStamp ref = ref -1L
         let mutable lastEnter:TimeStamp = -1L
         let mutable lastFingerLeft:TimeStamp = -1L
         let mutable lastFingerRight:TimeStamp = -1L

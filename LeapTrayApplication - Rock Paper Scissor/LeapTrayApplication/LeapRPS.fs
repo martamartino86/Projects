@@ -5,11 +5,12 @@ module RockPaperScissor
     open System.Drawing
     open System.Collections.Generic
     open System.Diagnostics
+    open System.IO
+    open System.IO.Compression
     open GestIT
     open ClonableLeapFrame
     open LeapDriver
-    open System.IO
-    
+   
     type Delegate = delegate of string -> unit
 
     type Morra =
@@ -25,7 +26,11 @@ module RockPaperScissor
 
         (* Structures for debug-code *)
         let mutable ss : ISensor<LeapFeatureTypes,LeapEventArgs> option = None
-        let readFromFile = true // when false, you can decide to REGISTER gestures or JUST HAVING SO MUCH FUN WITH LEAP... (vedi <~~~ ~~~ ~~~ ~~~ ~~~ )
+#if RECORD
+        let mutable outf = ""
+#endif
+        let path = "FileRecording\\"
+        let formatpath = "RPS HH:mm:ss"
 
         do
             this.BackColor <- Color.PeachPuff
@@ -39,14 +44,44 @@ module RockPaperScissor
             lbl.Text <- "* ROCK PAPER SCISSOR *"
             this.Controls.Add(lbl)
 
-            let outf = @"C:\Users\Pc\Documents\Visual Studio 2012\Projects\LeapTrayApplication - Rock Paper Scissor\LeapTrayApplication\output.ser"
-            if readFromFile then
-              let f = File.OpenRead(outf)
-              ss <- Some(new GestIT.PlaybackSensor<LeapFeatureTypes,LeapEventArgs>(f) :> ISensor<LeapFeatureTypes,LeapEventArgs>)
-            else
-              let s = new LeapDriver.LeapSensor()
-              ss <- Some(s :> ISensor<LeapFeatureTypes,LeapEventArgs>)
-              s.OutputStream <- File.Open(outf, FileMode.Create, FileAccess.Write) // <~~~ ~~~ ~~~ ~~~ ~~~ ~~~ 
+#if RECORD
+            Directory.CreateDirectory(path) |> ignore
+            outf <- (path + System.DateTime.Now.ToString(formatpath) + ".file")
+#endif
+
+#if PLAYBACK
+            // creates a form, in which it has to be chosen the .zip from which to load the gesture's macro
+            let ofd = new OpenFileDialog()
+            ofd.InitialDirectory <- Directory.GetCurrentDirectory()
+            ofd.Filter <- "Zip Files (*.zip)|*.zip"
+            ofd.Multiselect <- false
+            let userclicked = ofd.ShowDialog()
+            if userclicked = DialogResult.OK then
+                let archivezip = ZipFile.Open(ofd.FileName, ZipArchiveMode.Read)
+                let filetounzip = 
+                    try
+                        archivezip.Entries
+                        |> Seq.find (fun x -> x.FullName.EndsWith(".file"))
+                    with _ ->
+                        null
+                if filetounzip <> null then
+                    let f = filetounzip.Open()
+                    ss <- Some(new GestIT.PlaybackSensor<LeapFeatureTypes,LeapEventArgs>(f) :> ISensor<LeapFeatureTypes,LeapEventArgs>)
+                else
+                    MessageBox.Show("File input not valid or already existing.") |> ignore
+                    System.Environment.Exit(0)
+            else if userclicked = DialogResult.Cancel || userclicked = DialogResult.Ignore || userclicked = DialogResult.Abort || userclicked = DialogResult.No then
+                this.Close()
+                System.Environment.Exit(0)
+#else
+            // mi serve dichiararlo perché devo impostarci l'OutputStream, mentre sul PBS non serve (è in lettura)
+            let s = new LeapDriver.LeapSensor()
+            ss <- Some(s :> ISensor<LeapFeatureTypes,LeapEventArgs>)
+#endif
+
+#if RECORD
+            s.OutputStream <- File.Open(outf, FileMode.Create, FileAccess.Write) // <~~~ ~~~ ~~~ ~~~ ~~~
+#endif
 
 
         (* Structures *)
@@ -83,22 +118,6 @@ module RockPaperScissor
                 || (lastHandRight >= f.Timestamp - 750000L) then
                     false
             else
-                (*
-                let l =
-                    frameQueue
-                    |> Seq.pairwise
-                    |> Seq.filter (fun (f1,f2) ->
-                        let p1 = f1.HandList.[id].Position
-                        let p2 = f2.HandList.[id].Position
-                        let delta_s = System.Math.Abs(p2.x - p1.x)
-                        let delta_t = (float32)(f2.Timestamp - f1.Timestamp) * 1000.f
-                        let v_m = (delta_s / delta_t) * 1000000.f
-                        (p2.x >= p1.x) && (v_m >= 0.4f)
-                    )
-                    |> Seq.length
-                let thresh = int(float(frameQueue.Count) * 0.7)
-                l > thresh
-                *)
                 let coda =
                     frameQueue
                     |> Seq.filter (fun y -> y.Timestamp >= f.Timestamp - 150000L)
@@ -120,9 +139,6 @@ module RockPaperScissor
         let movehandleft (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
-//            for h in f.HandList.Keys do
-//                Debug.WriteLine("hands.id.hashcode: {0}", h.GetHashCode(), h.Equals(x.Id))
-//            Debug.WriteLine("x.id.hashcode {0} ", x.Id.GetHashCode())
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
                 || (lastHandLeft >= f.Timestamp - 750000L) then
                     false
@@ -174,141 +190,7 @@ module RockPaperScissor
                         c1 && lastframes
                     else
                         false
-(*
-        let movefistdownright (x:LeapEventArgs) =
-            let f = x.Frame
-            let id = x.Id
-            if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
-                Debug.WriteLine("{0} dita, {1} mani", f.PointableList.Count, f.HandList.Count)
-                false
-            else
-                // studio il movimento su quasi tutta la coda: in 1/10 di secondo devo fare il movimento "scendi col pugno"
-                let coda =
-                    frameQueue
-                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
-                //Debug.WriteLine("ci sono {0} frame in coda", Seq.length coda)
-                if coda |> Seq.isEmpty then
-                    Debug.WriteLine("coda empty")
-                    false
-                else
-                    let maxY =
-                        coda
-                        |> Seq.maxBy (fun y -> y.HandList.[id].Position.y)
-                    minX_glob <-
-                        coda
-                        |> Seq.minBy (fun q -> q.HandList.[id].Position.x)
-                    let c1 =
-                        coda
-                        |> Seq.filter (fun z -> z.Timestamp >= maxY.Timestamp)
-                    if Seq.length c1 < 2 then
-                        false
-                    else
-                        let c2 =
-                            c1
-                            |> Seq.pairwise
-                            |> Seq.forall (fun (u1,u2) ->
-                                                          let p1 = u1.HandList.[id].Position
-                                                          let p2 = u2.HandList.[id].Position
-                                                          //Debug.WriteLine ("Y1: {0} {2} Y2: {1} {3}", p1.y, p2.y, u1.Timestamp, u2.Timestamp)
-                                                          Debug.Flush()
-                                                          p1.x < p2.x && p1.y > p2.y
-                            )
-                        let changesign = ref 0
-                        let passedbyorigin =
-                            c1
-                            |> Seq.iter (fun u -> if u.HandList.[id].Position.x > 0.f then changesign := 1 )
-//                        let passedbyorigin =
-//                            c1
-//                            |> Seq.exists (fun v -> let xx = v.HandList.[id].Position
-//                                                    xx.x >= -5.f && xx.x <= 5.f
-//                            )
-                        Debug.WriteLine("{0}", !changesign)
-                        c2 && !changesign = 1
 
-        let movefistupright (x:LeapEventArgs) =
-            let f = x.Frame
-            let id = x.Id
-            if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
-                Debug.WriteLine("{0} dita, {1} mani", f.PointableList.Count, f.HandList.Count)
-                false
-            else
-                let coda =
-                    frameQueue
-                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 100000L)
-                if not (minX_glob.HandList.ContainsKey(id)) || f.HandList.[id].Position.x < minX_glob.HandList.[id].Position.x then
-                    Debug.WriteLine("nuovo min x: {0}", f.HandList.[id].Position.x)
-                    minX_glob <- f
-                    false
-                else
-                    if coda |> Seq.isEmpty then
-                        Debug.WriteLine("coda empty")
-                        false
-                    else
-                        maxY_glob <- 
-                            coda
-                            |> Seq.maxBy (fun y -> y.HandList.[id].Position.y)
-                        let c =
-                            coda
-                            |> Seq.filter (fun z -> z.Timestamp >= minX_glob.Timestamp)
-                            |> Seq.pairwise
-                            |> Seq.forall (fun (u1,u2) -> let p1 = u1.HandList.[id].Position
-                                                          let p2 = u2.HandList.[id].Position
-                                                          p1.x < p2.x && p1.y < p2.y
-                            )
-                        if c then
-                            maxY_glob <- f
-                            nVariations <- 1
-                            true
-                        else
-                            false
-
-        let movefistdownleft (x:LeapEventArgs) =
-            let f = x.Frame
-            let id = x.Id
-            if f.PointableList.Count > 2 || f.HandList.Count <> 1 then
-                Debug.WriteLine("{0} dita, {1} mani", f.PointableList.Count, f.HandList.Count)
-                false
-            else
-                let coda =
-                    frameQueue
-                    |> Seq.filter (fun y -> y.HandList.ContainsKey(id) && y.Timestamp >= f.Timestamp - 150000L)
-                if not (maxY_glob.HandList.ContainsKey(id)) || f.HandList.[id].Position.y > maxY_glob.HandList.[id].Position.y then
-                    Debug.WriteLine("nuovo max y: {0}", f.HandList.[id].Position.y)
-                    maxY_glob <- f
-                    false
-                else
-                    if coda |> Seq.isEmpty then
-                        Debug.WriteLine("coda empty")
-                        false
-                    else
-                        let maxYtmp =
-                            coda
-                            |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
-                        let c1 =
-                            coda
-                            |> Seq.filter (fun q -> q.Timestamp >= maxYtmp.Timestamp)
-                        if Seq.length c1 < 2 then
-                            false
-                        //Debug.WriteLine("# frame: {0}", Seq.length c1)
-                        else
-                            let c2 =
-                                c1
-                                |> Seq.pairwise
-                                |> Seq.forall (fun (u1,u2) -> 
-                                                              let p1 = u1.HandList.[id].Position
-                                                              let p2 = u2.HandList.[id].Position
-                                                              Debug.WriteLine ("{0} {1} - {2}", p1, p2, (p1.x > p2.x && p1.y > p2.y))
-                                                              p1.x > p2.x && p1.y > p2.y
-                                )
-                       
-                            let passedbyorigin =
-                                coda
-                                |> Seq.exists (fun v -> let xx = v.HandList.[id].Position
-                                                        Debug.WriteLine("origine? {0}", xx.x)
-                                                        xx.x >= -5.f && xx.x <= 5.f
-                                )
-                            c2 && passedbyorigin
-*)
         let pushhanddown (x:LeapEventArgs) =
             let thresh = 50.f
             let f = x.Frame
@@ -433,7 +315,6 @@ module RockPaperScissor
         (* NET for Rock Paper Scissor *)
         let oscillations = new Parallel<_,_>(movedhandright, movedhandleft)
         let s1 = new Sequence<_,_>(oscillations, movedhanddown)
-//        let net = s1.ToGestureNet(s)
         (* NET for debugging (pbs reads leap input from a file) *)
         let net = s1.ToGestureNet(ss.Value)
 
@@ -454,9 +335,19 @@ module RockPaperScissor
         let printLabel1 = printLabel
         let deleg = new Delegate(printLabel1)
 
+        let ZipFile () =
+              let zipdestination = System.DateTime.Now.ToString(formatpath) + ".zip"
+              System.IO.Compression.ZipFile.CreateFromDirectory(path, zipdestination)
+              Directory.Delete(path, true)
+
+        override x.OnShown(e:System.EventArgs) =
+            x.BringToFront()
+            base.OnShown(e)
+
         override x.OnLoad(e:System.EventArgs) =
+            x.TopMost <- true
             x.Visible <- true
-            x.ShowInTaskbar <- true // Remove from taskbar.
+            x.ShowInTaskbar <- true
             ss.Value.SensorEvents.Add(fun e ->
                 (* Removing too old frames *)
                 let t = e.Event.Frame.Timestamp
@@ -515,26 +406,22 @@ module RockPaperScissor
                                                                             | _ -> ()
                                                         | _ -> ()
                                                         lbl.Invalidate()
-            
             )
-            match ss with
-            | Some(x) -> match x with | :? PlaybackSensor<LeapFeatureTypes,LeapEventArgs> as y -> y.start() | _ -> ()
-            | _ -> ()
+#if PLAYBACK
+            (ss.Value :?> PlaybackSensor<_,_>).start()
+#endif
+            base.OnLoad(e)
 
         override x.OnClosing(e:System.ComponentModel.CancelEventArgs) =
             (* Closing file for DEBUG *)
-            match ss with
-            | Some(x) -> match x with
-                         | :? LeapDriver.LeapSensor as y ->
-                                                            if y.OutputStream <> null then
-                                                                let f = y.OutputStream
-                                                                y.OutputStream <- null
-                                                                f.Close()
-                         | _ -> ()
-            | _ -> ()
-
+#if RECORD
+            let f = (ss.Value :?> LeapSensor).OutputStream
+            (ss.Value :?> LeapSensor).OutputStream <- null
+            f.Close()
+            ZipFile()
+#endif
             Application.Exit()
-
+            base.OnClosing(e)
 
     [<EntryPoint; System.STAThread>]
     let main argv = 
