@@ -25,7 +25,7 @@ module RockPaperScissor
         let btn = new Button()
 
         (* Structures for debug-code *)
-        let mutable ss : ISensor<LeapFeatureTypes,LeapEventArgs> option = None
+        let mutable ss : ISensor<_,_> option = None
 #if RECORD
         let mutable outf = ""
 #endif
@@ -55,7 +55,7 @@ module RockPaperScissor
             ofd.InitialDirectory <- Directory.GetCurrentDirectory()
             ofd.Filter <- "Zip Files (*.zip)|*.zip"
             ofd.Multiselect <- false
-            let userclicked = ofd.ShowDialog()
+            let userclicked = ofd.ShowDialog(this)
             if userclicked = DialogResult.OK then
                 let archivezip = ZipFile.Open(ofd.FileName, ZipArchiveMode.Read)
                 let filetounzip = 
@@ -345,7 +345,6 @@ module RockPaperScissor
             base.OnShown(e)
 
         override x.OnLoad(e:System.EventArgs) =
-            x.TopMost <- true
             x.Visible <- true
             x.ShowInTaskbar <- true
             ss.Value.SensorEvents.Add(fun e ->
@@ -408,7 +407,8 @@ module RockPaperScissor
                                                         lbl.Invalidate()
             )
 #if PLAYBACK
-            (ss.Value :?> PlaybackSensor<_,_>).start()
+            let t = (ss.Value :?> PlaybackSensor<LeapFeatureTypes,LeapEventArgs>)
+            t.start()
 #endif
             base.OnLoad(e)
 
