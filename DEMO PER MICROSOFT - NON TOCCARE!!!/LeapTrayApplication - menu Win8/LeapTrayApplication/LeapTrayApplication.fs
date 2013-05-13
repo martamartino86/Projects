@@ -11,6 +11,7 @@ module LeapTrayApplication
     open System.IO
     open System.IO.Compression
     open GestIT
+    open GestIT.FSharp
     open ClonableLeapFrame
     open LeapDriver
     
@@ -43,6 +44,12 @@ module LeapTrayApplication
         let mutable threshpointfingerright:TimeStamp = thresh
         let mutable threshpointfingerup:TimeStamp = thresh
         let mutable threshpointfingerdown:TimeStamp = thresh
+
+        let initializeTrashes =
+            threshpointfingerup <- thresh                
+            threshpointfingerdown <- thresh
+            threshpointfingerleft <- thresh
+            threshpointfingerright <- thresh
 
         (* Predicates *)
         let p = new Predicate<LeapEventArgs>(fun x -> true)    
@@ -142,34 +149,70 @@ module LeapTrayApplication
         let pointableCountIs n =
             new Predicate<LeapEventArgs>(fun x -> x.Frame.PointableList.Count = n)
 
+        (* Handlers *)
+        let openmenu (sender,e) =            
+            SendKeys.SendWait("^{ESC}")
+        let closemenu (sender,e) =
+            SendKeys.SendWait("{ESC}")
+        let savelastclosehand (sender,e:SensorEventArgs<LeapFeatureTypes, LeapEventArgs>) =
+            ts_closedhand := e.Event.Frame.Timestamp
+        let movefingerleft (sender,e:SensorEventArgs<LeapFeatureTypes,LeapEventArgs>) =
+            threshpointfingerdown <- thresh
+            threshpointfingerright <- thresh
+            threshpointfingerup <- thresh
+            let t = threshpointfingerleft - 30000L
+            if t > 0L then threshpointfingerleft <- t;
+            lastFingerLeft <- e.Event.Frame.Timestamp
+            SendKeys.SendWait("{LEFT 1}")
+        let movefingerright (sender,e:SensorEventArgs<LeapFeatureTypes,LeapEventArgs>) =
+            threshpointfingerdown <- thresh
+            threshpointfingerleft <- thresh
+            threshpointfingerup <- thresh
+            let t = threshpointfingerright - 30000L
+            if t > 0L then
+                threshpointfingerright <- t;
+            lastFingerRight <- e.Event.Frame.Timestamp
+            SendKeys.SendWait("{RIGHT 1}")
+        let movefingerup (sender,e:SensorEventArgs<LeapFeatureTypes,LeapEventArgs>) =
+            threshpointfingerdown <- thresh
+            threshpointfingerright <- thresh
+            threshpointfingerleft <- thresh
+            let t = threshpointfingerup - 30000L
+            if t > 0L then threshpointfingerup <- t;
+            lastFingerUp <- e.Event.Frame.Timestamp
+            SendKeys.SendWait("{UP 1}")
+        let movefingerdown (sender,e:SensorEventArgs<LeapFeatureTypes,LeapEventArgs>) =
+            threshpointfingerleft <- thresh
+            threshpointfingerright <- thresh
+            threshpointfingerup <- thresh
+            let t = threshpointfingerdown - 30000L
+            if t > 0L then threshpointfingerdown <- t;
+            lastFingerDown <- e.Event.Frame.Timestamp
+            SendKeys.SendWait("{DOWN 1}")
+        let openapplication (sender,e:SensorEventArgs<LeapFeatureTypes,LeapEventArgs>) =
+            initializeTrashes
+            lastEnter <- e.Event.Frame.Timestamp
+            SendKeys.SendWait("{ENTER}")
+
         (*  GroundTerms definitions *)
-        let openedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, openhand)
-        let closedhand1 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closetimedhand)
         let keepclosedhand = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, keepclosed)
-
-        let closedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)
+        let closedhand2 = (new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)) |^ savelastclosehand
         let openedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, opentimedhand)
-    
-        let movedfingerup = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Up)
-        let movedfingerdown = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Down)
-        let movedfingerleft = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Left)
-        let movedfingerright = new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Right)
-        let pushedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)
-
-        let s1 = new Sequence<_,_>(closedhand2, keepclosedhand) // chiudi (tenendo chiusa mano)
-        let s2 = new Sequence<_,_>(closedhand2, openedhand2) // apri
-        let iterr = new Iter<_,_>(movedfingerright)
-        let iterl = new Iter<_,_>(movedfingerleft)
-        let iteru = new Iter<_,_>(movedfingerup)
-        let iterd = new Iter<_,_>(movedfingerdown)
-        let ch1 = new Choice<_,_>(iterr, iterl, iteru, iterd)
-        let ch2 = new Choice<_,_>(pushedhanddown, s1)
-    
-        let ch3 = new Choice<_,_>(ch1, ch2)
-        let s22 = new Sequence<_,_>(s2, ch3)
-        let net222 = s22.ToGestureNet(s)
+        let movedfingerup = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Up)) |^ movefingerup
+        let movedfingerdown = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Down)) |^ movefingerdown
+        let movedfingerleft = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Left)) |^ movefingerleft
+        let movedfingerright = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Right))  |^ movefingerright
+        let pushedhanddown = (new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)) |^ openapplication
 
         do
+            (* Net definition *)
+            let expr = 
+              ((closedhand2 |>> openedhand2) |^ openmenu) 
+              |>> ( ((!* movedfingerleft) |?| (!* movedfingerright) |?| (!* movedfingerup) |?| (!* movedfingerdown))
+                    |?| (pushedhanddown |?| ((closedhand2 |>> keepclosedhand) |^ closemenu))
+                  )
+            expr.ToGestureNet(s) |> ignore
+
             trayMenu <- new ContextMenu()
             trayIcon <- new NotifyIcon()
             trayIcon.Text <- "MyTrayApp";
@@ -210,48 +253,7 @@ module LeapTrayApplication
                     (* update frame informations *)
                     UpdateInformations(f, e.FeatureType, id)
             )
-            let initializeTrashes =
-                threshpointfingerup <- thresh                
-                threshpointfingerdown <- thresh
-                threshpointfingerleft <- thresh
-                threshpointfingerright <- thresh
 
-            openedhand1.Gesture.Add(fun (sender,e) -> ts_openedhand := e.Event.Frame.Timestamp)
-            closedhand2.Gesture.Add(fun (sender,e) -> ts_closedhand := e.Event.Frame.Timestamp)
-            s1.Gesture.Add(fun _ -> SendKeys.SendWait("{ESC}")) // close menu
-            s2.Gesture.Add(fun (sender,e) -> SendKeys.SendWait("^{ESC}")) // open menu
-            iterr.Gesture.Add(fun (sender,e) -> threshpointfingerdown <- thresh
-                                                threshpointfingerleft <- thresh
-                                                threshpointfingerup <- thresh
-                                                let t = threshpointfingerright - 30000L
-                                                if t > 0L then
-                                                    threshpointfingerright <- t;
-                                                lastFingerRight <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{RIGHT 1}"))
-            iterl.Gesture.Add(fun (sender,e) -> threshpointfingerdown <- thresh
-                                                threshpointfingerright <- thresh
-                                                threshpointfingerup <- thresh
-                                                let t = threshpointfingerleft - 30000L
-                                                if t > 0L then threshpointfingerleft <- t;
-                                                lastFingerLeft <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{LEFT 1}"))
-            iteru.Gesture.Add(fun (sender,e) -> threshpointfingerdown <- thresh
-                                                threshpointfingerright <- thresh
-                                                threshpointfingerleft <- thresh
-                                                let t = threshpointfingerup - 30000L
-                                                if t > 0L then threshpointfingerup <- t;
-                                                lastFingerUp <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{UP 1}"))
-            iterd.Gesture.Add(fun (sender,e) -> threshpointfingerleft <- thresh
-                                                threshpointfingerright <- thresh
-                                                threshpointfingerup <- thresh
-                                                let t = threshpointfingerdown - 30000L
-                                                if t > 0L then threshpointfingerdown <- t;
-                                                lastFingerDown <- e.Event.Frame.Timestamp
-                                                SendKeys.SendWait("{DOWN 1}"))
-            pushedhanddown.Gesture.Add(fun (sender,e) -> initializeTrashes
-                                                         lastEnter <- e.Event.Frame.Timestamp
-                                                         SendKeys.SendWait("{ENTER}"))
             trayIcon.MouseDoubleClick.Add(fun _ ->
                                             if x.Visible = true then
                                                 x.Visible <- false

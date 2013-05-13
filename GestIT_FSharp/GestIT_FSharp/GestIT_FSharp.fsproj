@@ -40,6 +40,7 @@
   <ItemGroup>
     <Compile Include="GestIT_Library.fs" />
     <Compile Include="PlaybackSensor.fs" />
+    <Compile Include="Utils.fs" />
     <None Include="TestSerialization.fsx" />
   </ItemGroup>
   <ItemGroup>

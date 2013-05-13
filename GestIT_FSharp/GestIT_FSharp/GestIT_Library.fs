@@ -68,6 +68,8 @@ namespace GestIT
       member this.Gestured(e) = gestureEvent.Trigger(this, e)
       [<CLIEvent>]
       member this.Gesture = gestureEvent.Publish
+
+//      abstract member Children : seq<GestureExpr<'T, 'U>>
       abstract member ToNet: ISensor<'T,'U> -> GestureNet<'T,'U>
       member this.ToInternalGestureNet(s) =
         let net = this.ToNet(s)
@@ -114,6 +116,8 @@ namespace GestIT
       /// <param name="f">Feature.</param>
       /// <param name="p">Predicate.</param>
       member private x.IgnoreMe() = ()
+
+//      override this.Children = Seq.empty
 
       member this.Feature = f
       member this.Predicate = p
@@ -190,6 +194,8 @@ namespace GestIT
       /// <param name="subexprs">Subexpressions of the operator.</param>
       member private this.IgnoreMe() = ()
 
+//      override this.Children = subexprs |> Array.toSeq
+
       /// <summary>
       /// This method is not intended to be used outside.
       /// </summary>
@@ -220,6 +226,8 @@ namespace GestIT
       /// </summary>
       /// <param name="subexprs">Subexpressions of the operator.</param>
       member private this.IgnoreMe() = ()
+
+//      override this.Children = subexprs |> Array.toSeq
 
       /// <summary>
       /// This method is not intended to be used outside.
@@ -264,6 +272,8 @@ namespace GestIT
       /// <param name="subexprs">Subexpressions of the operator.</param>
       member private this.IgnoreMe() = ()
 
+//      override this.Children = subexprs |> Array.toSeq
+
       /// <summary>
       /// This method is not intended to be used outside.
       /// </summary>
@@ -297,6 +307,8 @@ namespace GestIT
       /// </summary>
       /// <param name="subexprs">Subexpressions of the operator.</param>
       member private this.IgnoreMe() = ()
+
+      //override this.Children = seq { yield x }
 
       /// <summary>
       /// This method is not intended to be used outside.
