@@ -21,6 +21,10 @@ module RockPaperScissor
         | Paper
         | Scissor
 
+    type Direction =
+        | Left
+        | Right
+
     type TrayApplication (s:ISensor<LeapFeatureTypes,LeapEventArgs>) as this =
         inherit Form()
 
@@ -62,7 +66,7 @@ module RockPaperScissor
         let checkfingers (ptblist:ClonablePointable seq) (handlist:ClonableHand seq) =
             let h = [| for x in handlist -> x |].[0]
             ptblist |> Seq.forall(fun y -> y.IdHand = h.Id)
-        let movehandright (x:LeapEventArgs) =
+        let movehand (d:Direction) (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
@@ -75,43 +79,32 @@ module RockPaperScissor
                 if Seq.isEmpty coda then
                     false
                 else
-                    let minX =
-                        coda
-                        |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
-                    // if hand moved less than 5cm to the right, false; else keep checking
-                    if f.HandList.[id].Position.x - minX.HandList.[id].Position.x < 50.F then
-                        false
-                    else
-                        // if in 2/10 sec i'm going always to the right, then true
-                        let exists =
+                    match d with
+                    | Direction.Right ->
+                        let minX =
                             coda
-                            |> Seq.forall (fun q -> q.HandList.[id].Position.x >= minX.HandList.[id].Position.x)
-                        exists
+                            |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
+                        // if hand moved less than 5cm to the right, false; else keep checking
+                        if f.HandList.[id].Position.x - minX.HandList.[id].Position.x < 50.F then
+                            false
+                        else
+                            // if in 2/10 sec i'm going always to the right, then true
+                            let exists =
+                                coda
+                                |> Seq.forall (fun q -> q.HandList.[id].Position.x >= minX.HandList.[id].Position.x)
+                            exists
+                    | Direction.Left ->
+                        let maxX =
+                            coda
+                            |> Seq.maxBy (fun z -> z.HandList.[id].Position.x)
+                        if maxX.HandList.[id].Position.x - f.HandList.[id].Position.x < 50.F then
+                            false
+                        else
+                            let exists =
+                                coda
+                                |> Seq.forall (fun q -> q.HandList.[id].Position.x <= maxX.HandList.[id].Position.x)
+                            exists
     
-        let movehandleft (x:LeapEventArgs) =
-            let f = x.Frame
-            let id = x.Id
-            if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
-                || (lastHandLeft >= f.Timestamp - 750000L) || not (checkfingers f.PointableList.Values f.HandList.Values) then
-                    false
-            else
-                let coda =
-                    frameQueue
-                    |> Seq.filter (fun y -> y.Timestamp >= f.Timestamp - 150000L)
-                if Seq.isEmpty coda then
-                    false
-                else
-                    let maxX =
-                        coda
-                        |> Seq.maxBy (fun z -> z.HandList.[id].Position.x)
-                    if maxX.HandList.[id].Position.x - f.HandList.[id].Position.x < 50.F then
-                        false
-                    else
-                        let exists =
-                            coda
-                            |> Seq.forall (fun q -> q.HandList.[id].Position.x <= maxX.HandList.[id].Position.x)
-                        exists
-
         let movehanddown (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
@@ -187,8 +180,8 @@ module RockPaperScissor
                                 | _ -> ()
             lbl.Invalidate()
 
-        let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandright)
-        let movedhandleft = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandleft)
+        let movedhandleft = new GroundTerm<LeapFeatureTypes,LeapEventArgs>(LeapFeatureTypes.MoveHand, movehand Direction.Left)
+        let movedhandright = new GroundTerm<LeapFeatureTypes,LeapEventArgs>(LeapFeatureTypes.MoveHand, movehand Direction.Right)
         let movedhanddown = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehanddown)
 
         (* Sensor *)
