@@ -6,15 +6,16 @@
     open System.Security.Permissions
     open System.Diagnostics
 
-    /// <summary>
-    /// File:   ClonableFrame.fs
-    /// Author: Marta Martino
-    /// MyFrame is a personal representation of LEAP's frame informations.
-    /// </summary>
-    [<System.Runtime.CompilerServices.CompilerGeneratedAttribute>]
-    type internal ClonableLeapFrameDoc () =
-        class
-        end
+    ///</member>
+    ///<member name="N:ClonableLeapFrame">
+    ///  <summary>
+    ///  <para>File:   ClonableFrame.fs</para>
+    ///  <para>Author: Marta Martino</para>
+    ///  <para>ClonableFrame defines a kind of Frame object, with the clonable property in addition.</para>
+    ///  </summary>
+    type private IgnoreMe () =
+      class
+      end
 
     /// <summary>
     /// Representation of ids. Every instance contains a different GUID.

@@ -10,6 +10,18 @@ namespace GestIT
     open System.Runtime.Serialization.Formatters.Binary
     open System.Threading
 
+    /// </member>
+    /// <member name="N:LeapDriver">
+    /// <summary>
+    /// <para>File:   PlaybackSensor.fs</para>
+    /// <para>Author: Marta Martino</para>
+    /// <para>PlaybackSensor receives as input a stream. This file has be written by LeapDriver with the information about device's event.
+    /// It permits to simulate the Petri's Net behaviour without the direct usage of Leap sensor, triggering events assembled from the input file.</para>
+    /// </summary>
+    type private IgnoreMe () =
+      class
+      end
+
     /// <summary>
     /// It represent PlaybackSensor.
     /// </summary>

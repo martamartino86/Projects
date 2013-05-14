@@ -1,5 +1,7 @@
-﻿// Ulteriori informazioni su F# all'indirizzo http://fsharp.net
-// Per ulteriori informazioni, vedere il progetto 'Esercitazione su F#'.
+﻿/// <summary>
+/// File:     LeapRPS.fs
+/// Author:   Marta Martino
+/// </summary>
 module RockPaperScissor
     open System.Windows.Forms
     open System.Drawing
@@ -15,9 +17,9 @@ module RockPaperScissor
     type Delegate = delegate of string -> unit
 
     type Morra =
-        | Rock = 0
-        | Paper = 1
-        | Scissor = 2
+        | Rock
+        | Paper
+        | Scissor
 
     type TrayApplication (s:ISensor<LeapFeatureTypes,LeapEventArgs>) as this =
         inherit Form()
@@ -33,11 +35,11 @@ module RockPaperScissor
         (* Structures *)
         let frameQueue = new Queue<ClonableFrame>()
         let mutable lastFrameInQueue = new ClonableFrame() // it represents the last enqueued frame
-        let vectorX = new Leap.Vector((float32)1, (float32)0, (float32)0)
-        let vectorY = new Leap.Vector((float32)0, (float32)(-1),(float32) 0)
-        let vectorZ = new Leap.Vector((float32)0, (float32)0, (float32)(-1))
-        let mutable playerplay:Morra = Morra.Rock
-        let mutable pcplay:int = 0
+        let vectorX = new Leap.Vector(1.f, 0.f, 0.f)
+        let vectorY = new Leap.Vector(0.f, -1.f, 0.f)
+        let vectorZ = new Leap.Vector(0.f, 0.f, -1.f)
+        let mutable playerplay = Morra.Rock
+        let mutable pcplay = 0
         let r = new System.Random()
         (* Timestamps *)
         let ts_openedhand = ref(-1L : TimeStamp)
@@ -57,11 +59,14 @@ module RockPaperScissor
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
         let p = new Predicate<LeapEventArgs>(fun x -> true)
+        let checkfingers (ptblist:ClonablePointable seq) (handlist:ClonableHand seq) =
+            let h = [| for x in handlist -> x |].[0]
+            ptblist |> Seq.forall(fun y -> y.IdHand = h.Id)
         let movehandright (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
-                || (lastHandRight >= f.Timestamp - 750000L) then
+                || (lastHandRight >= f.Timestamp - 750000L) || not (checkfingers f.PointableList.Values f.HandList.Values) then
                     false
             else
                 let coda =
@@ -73,10 +78,11 @@ module RockPaperScissor
                     let minX =
                         coda
                         |> Seq.minBy (fun z -> z.HandList.[id].Position.x)
+                    // if hand moved less than 5cm to the right, false; else keep checking
                     if f.HandList.[id].Position.x - minX.HandList.[id].Position.x < 50.F then
                         false
                     else
-                        // se in 2/10 sec vado sempre a destra e ho fatto almeno 5 cm, do il predicato come vero
+                        // if in 2/10 sec i'm going always to the right, then true
                         let exists =
                             coda
                             |> Seq.forall (fun q -> q.HandList.[id].Position.x >= minX.HandList.[id].Position.x)
@@ -86,7 +92,7 @@ module RockPaperScissor
             let f = x.Frame
             let id = x.Id
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
-                || (lastHandLeft >= f.Timestamp - 750000L) then
+                || (lastHandLeft >= f.Timestamp - 750000L) || not (checkfingers f.PointableList.Values f.HandList.Values) then
                     false
             else
                 let coda =
@@ -101,7 +107,6 @@ module RockPaperScissor
                     if maxX.HandList.[id].Position.x - f.HandList.[id].Position.x < 50.F then
                         false
                     else
-                        // se in 2/10 sec vado sempre a sx e ho fatto almeno 5 cm, do il predicato come vero
                         let exists =
                             coda
                             |> Seq.forall (fun q -> q.HandList.[id].Position.x <= maxX.HandList.[id].Position.x)
@@ -180,7 +185,6 @@ module RockPaperScissor
                                 | 1 -> lbl.Invoke(deleg, s + "* PAPER! *\nPlayer wins!") |> ignore; lbl.BackColor <- Color.Green
                                 | 2 -> lbl.Invoke(deleg, s + "* SCISSOR! *\nYou're even!") |> ignore
                                 | _ -> ()
-            | _ -> ()
             lbl.Invalidate()
 
         let movedhandright = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, movehandright)

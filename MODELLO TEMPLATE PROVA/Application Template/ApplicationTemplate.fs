@@ -1,4 +1,5 @@
 ﻿/// File:     ApplicationTemplate.fs
+/// Author:   Marta Martino
 
 module ApplicationTemplate
     open System.Windows.Forms

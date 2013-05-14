@@ -12,6 +12,17 @@ namespace LeapDriver
     open GestIT
     open Leap
 
+    /// </member>
+    /// <member name="N:LeapDriver">
+    /// <summary>
+    /// <para>File:   Driver.fs</para>
+    /// <para>Author: Marta Martino</para>
+    /// <para>LeapDriver implements a model for the elaboration of LEAP's raw datas.</para>
+    /// </summary>
+    type private IgnoreMe () =
+      class
+      end
+
 (*
     // KEYBOARD features that have to be notified from the sensor //
     type KeyFeatureTypes =

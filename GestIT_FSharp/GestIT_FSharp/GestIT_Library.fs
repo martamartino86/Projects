@@ -1,13 +1,19 @@
-/// <summary>
-/// File:   GestIT_Library.fs
-/// Author: Andrea Canciani
-/// GestIT provide for gesture recognition.
-/// </summary>
 namespace GestIT
 
     open System.Runtime.InteropServices
     open System.Diagnostics
     open System.IO
+
+    /// </member>
+    /// <member name="N:GestIT">
+    /// <summary>
+    /// <para>File:   GestIT_Library.fs</para>
+    /// <para>Author: Andrea Canciani</para>
+    /// <para>GestIT provide for gesture recognition.</para>
+    /// </summary>
+    type private IgnoreMeTwice () =
+      class
+      end
 
     /// <summary>
     /// It represents the model of a tipical event coming from a sensor.
