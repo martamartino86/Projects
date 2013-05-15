@@ -63,14 +63,14 @@ module RockPaperScissor
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
         let p = new Predicate<LeapEventArgs>(fun x -> true)
-        let checkfingers (ptblist:ClonablePointable seq) (handlist:ClonableHand seq) =
-            let h = [| for x in handlist -> x |].[0]
-            ptblist |> Seq.forall(fun y -> y.IdHand = h.Id)
+//        let checkfingers (ptblist:ClonablePointable seq) (handlist:ClonableHand seq) =
+//            let h = [| for x in handlist -> x |].[0]
+//            ptblist |> Seq.forall(fun y -> y.IdHand = h.Id)
         let movehand (d:Direction) (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
-                || (lastHandRight >= f.Timestamp - 750000L) || not (checkfingers f.PointableList.Values f.HandList.Values) then
+                || (lastHandRight >= f.Timestamp - 750000L) then
                     false
             else
                 let coda =
@@ -150,14 +150,19 @@ module RockPaperScissor
 
         let movedhanddown_h (sender, e:SensorEventArgs<LeapFeatureTypes, LeapEventArgs>) =
             let f = e.Event.Frame
+            let h = [| for x in f.HandList.Values -> x |].[0]
+            let fingers =
+                f.PointableList.Values
+                |> Seq.filter (fun x -> x.IdHand = h.Id)
+                |> Seq.length
             let mutable s = "Player: "
-            if f.PointableList.Count <= 1 then
+            if fingers <= 1 then
                 s <- s + "* ROCK! *\n"
                 playerplay <- Morra.Rock
-            else if f.PointableList.Count <= 3 then
+            else if fingers <= 3 then
                 s <- s +  "* SCISSOR! *\n"
                 playerplay <- Morra.Scissor
-            else if f.PointableList.Count >= 4 then
+            else if fingers = 5 then
                 s <- s + "* PAPER! *\n"
                 playerplay <- Morra.Paper
             pcplay <- r.Next(0, 2)
@@ -208,7 +213,7 @@ module RockPaperScissor
             movedhanddown.Gesture.Add(movedhanddown_h)
 #else
             (* ...You can implement the net in a faster way! *)
-            let expr = ((movedhandleft |^ movedhandleft_h) |=| (movedhandright |^ movedhandright_h)) |>> (movedhanddown |^ movedhanddown_h)
+            let expr = ((movedhandleft |-> movedhandleft_h) |=| (movedhandright |-> movedhandright_h)) |>> (movedhanddown |-> movedhanddown_h)
             expr.ToGestureNet(s) |> ignore
 #endif
 

@@ -196,20 +196,20 @@ module LeapTrayApplication
 
         (*  GroundTerms definitions *)
         let keepclosedhand = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, keepclosed)
-        let closedhand2 = (new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)) |^ savelastclosehand
+        let closedhand2 = (new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, closehand)) |-> savelastclosehand
         let openedhand2 = new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, opentimedhand)
-        let movedfingerup = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Up)) |^ movefingerup
-        let movedfingerdown = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Down)) |^ movefingerdown
-        let movedfingerleft = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Left)) |^ movefingerleft
-        let movedfingerright = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Right))  |^ movefingerright
-        let pushedhanddown = (new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)) |^ openapplication
+        let movedfingerup = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Up)) |-> movefingerup
+        let movedfingerdown = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Down)) |-> movefingerdown
+        let movedfingerleft = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Left)) |-> movefingerleft
+        let movedfingerright = (new GroundTerm<_,LeapEventArgs>(LeapFeatureTypes.MoveFinger, movefinger Direction.Right))  |-> movefingerright
+        let pushedhanddown = (new GroundTerm<_,_>(LeapFeatureTypes.MoveHand, pushhanddown)) |-> openapplication
 
         do
             (* Net definition *)
             let expr = 
-              ((closedhand2 |>> openedhand2) |^ openmenu) 
-              |>> ( ((!* movedfingerleft) |?| (!* movedfingerright) |?| (!* movedfingerup) |?| (!* movedfingerdown))
-                    |?| (pushedhanddown |?| ((closedhand2 |>> keepclosedhand) |^ closemenu))
+              ((closedhand2 |>> openedhand2) |-> openmenu) 
+              |>> ( ((!* movedfingerleft) |^| (!* movedfingerright) |^| (!* movedfingerup) |^| (!* movedfingerdown))
+                    |^| (pushedhanddown |^| ((closedhand2 |>> keepclosedhand) |-> closemenu))
                   )
             expr.ToGestureNet(s) |> ignore
 

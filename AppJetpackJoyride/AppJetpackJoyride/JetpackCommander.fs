@@ -39,10 +39,10 @@ module Program
                                      SendKeys.SendWait("{UP}"))
     let netgioco2 = c2.ToGestureNet(s)
 #endif
-    let movefinger_goup = (new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, movefingerup 2)) |^ movefingerGoUp_h
-    let movefinger_stay = (new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, movefingerup 5)) |^ movefingerStay_h
-    let expr1 = (!* movefinger_goup) |?| movefinger_stay
+    let movefinger_goup = (new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, movefingerup 2)) |-> movefingerGoUp_h
+    let movefinger_stay = (new GroundTerm<_,_>(LeapFeatureTypes.MoveFinger, movefingerup 5)) |-> movefingerStay_h
+    let expr1 = (!* movefinger_goup) |^| movefinger_stay
     expr1.ToGestureNet(s) |> ignore
-    let expr2 = (!* movefinger_stay) |?| movefinger_goup
+    let expr2 = (!* movefinger_stay) |^| movefinger_goup
     expr2.ToGestureNet(s) |> ignore
     System.Console.ReadLine() |> ignore

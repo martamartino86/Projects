@@ -10,7 +10,7 @@ let o3 = new GroundTerm<LeapFeatureTypes,LeapEventArgs>(LeapFeatureTypes.ActiveT
 let o4 = new GroundTerm<LeapFeatureTypes,LeapEventArgs>(LeapFeatureTypes.MoveFinger, fun _ -> true)
 let o5 = new GroundTerm<LeapFeatureTypes,LeapEventArgs>(LeapFeatureTypes.MoveHand, fun _ -> true)
 
-let n = ((o1 |=| o2) |?| (!* o3) |?| (o4 |=| o5)) |>> o1 |>> o2
+let n = ((o1 |=| o2) |^| (!* o3) |^| (o4 |=| o5)) |>> o1 |>> o2
 
 
 //n.Children |> Seq.iter (fun v -> System.Diagnostics.Debug.WriteLine(sprintf "%A" v))

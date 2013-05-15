@@ -78,7 +78,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="GestIT_FSharp">
-      <HintPath>..\..\..\..\Documents\Visual Studio 2012\Projects\GestIT_FSharp\LeapDriver\bin\Debug\GestIT_FSharp.dll</HintPath>
+      <HintPath>..\..\..\GestIT_FSharp\GestIT_FSharp\bin\Debug\GestIT_FSharp.dll</HintPath>
     </Reference>
     <Reference Include="LeapCSharp.NET3.5">
       <HintPath>..\..\..\Leap_Developer_Kit_0.7.9_3460_Windows\LeapSDK\lib\LeapCSharp.NET3.5.dll</HintPath>
