@@ -1,5 +1,6 @@
 TestResult
 *.suo
+*.dll
 bin
 obj
 *.psess
