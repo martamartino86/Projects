@@ -61,5 +61,5 @@ let (|>|) (a:GestureExpr<'T, 'U>) (b:GestureExpr<'T, 'U>) = a |^| b
 /// Defines the handler to assign |-> to the GestureExpr.
 let (|->) (a:GestureExpr<'T, 'U>) (evt:GestureExpr<'T, 'U>*SensorEventArgs<'T, 'U> -> unit) =
   a.Gesture.Add(evt)
-  registeredHandlers.Add(a, true)
+  if not (registeredHandlers.ContainsKey(a)) then registeredHandlers.Add(a, true)
   a
