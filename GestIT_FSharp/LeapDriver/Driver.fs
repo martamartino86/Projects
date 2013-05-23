@@ -157,7 +157,7 @@ namespace LeapDriver
     /// ClonableHandCleaner is the cleaner that works on ClonableHand.
     /// </summary>
     type ClonableHandCleaner(state:ClonableFrame) =
-        let debugHand = false
+        let debugHand = true
 
         /// <summary>
         /// Calculates the distance between two hands.
@@ -176,8 +176,13 @@ namespace LeapDriver
         /// <param name="newhand">New hand.</param>
         /// <returns>A boolean which represents if two hands are the same.</returns>
         let isTheSameHand (zombiets:TimeStamp) (zombiehand:ClonableHand) (newhand:Hand) =
-            let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* us -> s *) * 1.e3F (* m -> mm *)) (* mm / us *)
-            (handDistance zombiehand newhand) < float32(newhand.Frame.Timestamp - zombiets) * speedError + 3.F
+            let speedError = (1.F (* max speed in m/s *) * 1.e-6F (* 1/s -> 1/us *) * 1.e3F (* m -> mm *)) (* mm / us *)
+            //let speedError = 0.001
+            let a = (handDistance zombiehand newhand)
+            let b = float32(newhand.Frame.Timestamp - zombiets) * speedError + 3.F
+            System.Diagnostics.Debug.WriteLine("---> {0},{1},{2} - {3},{4},{5} ", zombiehand.Position.x, zombiehand.Position.y, zombiehand.Position.z, newhand.PalmPosition.x, newhand.PalmPosition.y, newhand.PalmPosition.z)
+            System.Diagnostics.Debug.WriteLine("---> {0} < {1}", a, b)
+            a < b
 
         let handTimestamps = new Dictionary<LeapId, TimeStamp>()
         let leapToFake = new Dictionary<LeapId, FakeId>()
@@ -224,7 +229,8 @@ namespace LeapDriver
             member x.Predict(t) =
                 for h in state.HandList do
                     let hand = h.Value
-                    hand.Position <- hand.Position (* mm *) + hand.Velocity (* mm/s *) * ((float32)(t (* us *) - lastTimestamp) * (1.e-6f))
+                    if hand.Velocity.Magnitude > 200.f then
+                      hand.Position <- hand.Position (* mm *) + hand.Velocity (* mm/s *) * ((float32)(t (* us *) - lastTimestamp) * (1.e-6f))
                 lastTimestamp <- t
 
             member x.TryUpdate(h) =
@@ -241,12 +247,15 @@ namespace LeapDriver
             member x.Correct(h) =
                 (* controllo se questa mano e' gia' contenuta nello stato *)
                 let leapId = h.Id
+                System.Diagnostics.Debug.WriteLine("** Chiamo la Correct sticazzi con handTimestamps.Count == {0}", handTimestamps.Count)
+                System.Diagnostics.Debug.Write("** Pipeline: ")
                 let maybeZombie =
                     handTimestamps
-                    |> Seq.filter ( fun x -> x.Value < h.Frame.Timestamp )
-                    |> Seq.map ( fun x -> x.Key,state.HandList.[leapToFake.[x.Key]] )
-                    |> Seq.sortBy ( fun (oldLeapId,x) -> handDistance x h )
-                    |> Seq.tryFind ( fun (oldLeapId,x) -> isTheSameHand handTimestamps.[oldLeapId] x h )
+                    |> Seq.filter ( fun x -> System.Diagnostics.Debug.Write("a"); x.Value < h.Frame.Timestamp )
+                    |> Seq.map ( fun x -> System.Diagnostics.Debug.Write("b"); x.Key,state.HandList.[leapToFake.[x.Key]] )
+                    |> Seq.sortBy ( fun (oldLeapId,x) -> System.Diagnostics.Debug.Write("c"); handDistance x h )
+                    |> Seq.tryFind ( fun (oldLeapId,x) -> System.Diagnostics.Debug.Write("d"); isTheSameHand handTimestamps.[oldLeapId] x h )
+                System.Diagnostics.Debug.WriteLine("")
                 match maybeZombie with
                 | None -> None
                 | Some (oldLeapId, hand) ->
@@ -267,7 +276,7 @@ namespace LeapDriver
                 state.HandList.Add(fakeId, hand)
                 handTimestamps.Add(leapId, h.Frame.Timestamp)
                 leapToFake.Add(leapId, fakeId)
-                if debugHand then printfn "NUOVO ID %A, L'HO AGGIUNTO" leapId 
+                if debugHand then System.Diagnostics.Debug.WriteLine ("NUOVO ID {0}, L'HO AGGIUNTO", leapId )
                 hand
 
     /// <summary>
@@ -334,9 +343,11 @@ namespace LeapDriver
                     None
 
             member x.Predict(t) =
+#if false
                 for p in state.PointableList do
                     let ptb = p.Value
                     ptb.Position <- ptb.Position + ptb.Velocity * ((float32)(t - lastTimestamp) * (1.e-6f))
+#endif
                 lastTimestamp <- t
 
             member x.Correct(p) =
@@ -398,7 +409,7 @@ namespace LeapDriver
         inherit Leap.Listener()
         let ctrl = new Controller()
 
-        let zombieWindow = 200000L
+        let zombieWindow = 500000L
         let state = new ClonableFrame()
         let handCleaner = new ClonableHandCleaner(state)
         let pointableCleaner = new ClonablePointableCleaner(state, handCleaner) :> IStateCleaner<_,_>
@@ -488,6 +499,11 @@ namespace LeapDriver
                         pointable,t
                 let e = new LeapEventArgs(state,pointable.Id)
                 this.MyTrigger t e
+
+            for h in frame.Hands do
+              System.Diagnostics.Debug.WriteLine("-------> {0},{1},{2}", h.PalmPosition.x, h.PalmPosition.y, h.PalmPosition.z)
+            
+
 
         override this.OnDisconnect(c:Controller) =
             if debugSensor then System.Console.WriteLine "OnDisconnect"
