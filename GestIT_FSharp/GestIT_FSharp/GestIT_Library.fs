@@ -58,6 +58,9 @@ type GestureNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArgs () =
   abstract member Front: GestureNet<'T,'U> list
   abstract member AddTokens: Token seq -> unit
   abstract member RemoveTokens: Token seq -> unit
+  abstract member ClearTokens: unit -> unit
+  interface System.IDisposable with
+    member this.Dispose() = this.ClearTokens()
 
 /// <summary>
 /// It represents the gesture expression, which has to be transformed into a GestureNet for allowing the token transition.
@@ -130,11 +133,6 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
   let mutable tokens = new System.Collections.Generic.HashSet<Token>()
   let mutable handler:System.IDisposable = null
 
-  let clearHandler() =
-    if handler <> null then
-      handler.Dispose()
-      handler <- null
-
   let handle (event:SensorEventArgs<'T,'U>) =
     if (exp.Feature :> System.Enum).Equals(event.FeatureType) then
       let p =
@@ -143,10 +141,9 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
           | Some d -> d.Invoke(event.Event)
       if p then
         let oldtokens = tokens
-        tokens <- new System.Collections.Generic.HashSet<Token>()
-        clearHandler()
+        this.ClearTokens()
         this.Completed(event,oldtokens)
-  
+
   override this.Front = [this]
 
   override this.AddTokens(ts) =
@@ -159,7 +156,13 @@ and private GroundTermNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventAr
     for t in ts do
       tokens.Remove(t) |> ignore
     if tokens.Count = 0 then
-      clearHandler()
+      this.ClearTokens()
+
+  override this.ClearTokens() =
+    tokens <- new System.Collections.Generic.HashSet<Token>()
+    if handler <> null then
+      handler.Dispose()
+      handler <- null
 
 /// <summary>
 /// It represents a generic operator, which is the element that connects two or more subnets between each others.
@@ -178,6 +181,10 @@ type private OperatorNet<'T,'U> when 'T :> System.Enum and 'U :> System.EventArg
   override this.RemoveTokens(ts) =
     for n in subnets do
       n.RemoveTokens(ts)
+
+  override this.ClearTokens() =
+    for n in subnets do
+      n.ClearTokens()
 
 /// <summary>
 /// It represents the Sequence operator.
