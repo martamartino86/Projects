@@ -36,7 +36,7 @@ module ApplicationTemplate
         File.Open(outf, FileMode.Create, FileAccess.Write) 
 
     let zipFile () =
-        let zipdestination = "\\" + filename + System.DateTime.Now.ToString(timeformat) + ".zip"
+        let zipdestination = filename + System.DateTime.Now.ToString(timeformat) + ".zip"
         System.IO.Compression.ZipFile.CreateFromDirectory(path, zipdestination)
         Directory.Delete(path, true)
 #endif

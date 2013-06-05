@@ -49,16 +49,12 @@ module RockPaperScissor
         let ts_openedhand = ref(-1L : TimeStamp)
         let ts_closedhand = ref(-1L : TimeStamp)
         let mutable lastEnter:TimeStamp = -1L
-        let mutable lastFingerLeft:TimeStamp = -1L
-        let mutable lastFingerRight:TimeStamp = -1L
-        let mutable lastFingerUp:TimeStamp = -1L
-        let mutable lastFingerDown:TimeStamp = -1L
         let mutable lastHandRight:TimeStamp = -1L
         let mutable lastHandLeft:TimeStamp = -1L
+        let mutable lastHandDown:TimeStamp = -1L
         let threshpointfinger:TimeStamp = 300000L
         let mutable minX_glob = new ClonableFrame()
         let mutable maxY_glob = new ClonableFrame()
-        let mutable nVariations = 0
 
         (* Predicates *)
         let speed (x:float32) (y:float32) = x / y
@@ -69,8 +65,12 @@ module RockPaperScissor
         let movehand (d:Direction) (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
+            let lasthanddir =
+                match d with
+                | Direction.Right as z -> lastHandRight
+                | Direction.Left as z -> lastHandLeft
             if frameQueue |> Seq.exists (fun f -> not (f.HandList.ContainsKey(id))) || (f.HandList.Count <> 1) || (f.PointableList.Count > 2)
-                || (lastHandRight >= f.Timestamp - 750000L) then
+               || (lasthanddir >= f.Timestamp - 500000L) then
                     false
             else
                 let coda =
@@ -108,7 +108,7 @@ module RockPaperScissor
         let movehanddown (x:LeapEventArgs) =
             let f = x.Frame
             let id = x.Id
-            if f.HandList.Count <> 1 then
+            if f.HandList.Count <> 1 || (lastHandDown >= f.Timestamp - 750000L) then
                 false
             else
                 let id = x.Id
@@ -122,7 +122,7 @@ module RockPaperScissor
                     let maxY =
                         coda
                         |> Seq.maxBy (fun z -> z.HandList.[id].Position.y)
-                    if maxY.HandList.[id].Position.y - o.y > 75.f then
+                    if maxY.HandList.[id].Position.y - o.y > 70.f then
                         let c1 =
                             coda
                             |> Seq.filter (fun z -> z.Timestamp >= maxY.Timestamp)
@@ -130,7 +130,7 @@ module RockPaperScissor
                         let lastframes =
                             coda
                             |> Seq.filter (fun z -> z.Timestamp >= f.Timestamp - 50000L)
-                            |> Seq.forall (fun z -> z.HandList.[id].Velocity.MagnitudeSquared < 1000.f * 1000.f)
+                            |> Seq.forall (fun z -> Debug.WriteLine("{0}", z.HandList.[id].Velocity.MagnitudeSquared); z.HandList.[id].Velocity.MagnitudeSquared < 1500.f * 1000.f)
                         c1 && lastframes
                     else
                         false
@@ -151,6 +151,7 @@ module RockPaperScissor
         let movedhanddown_h (sender, e:SensorEventArgs<LeapFeatureTypes, LeapEventArgs>) =
             let f = e.Event.Frame
             let h = [| for x in f.HandList.Values -> x |].[0]
+            lastHandDown <- f.Timestamp
             let fingers =
                 f.PointableList.Values
                 |> Seq.filter (fun x -> x.IdHand = h.Id)
@@ -162,7 +163,7 @@ module RockPaperScissor
             else if fingers <= 3 then
                 s <- s +  "* SCISSOR! *\n"
                 playerplay <- Morra.Scissor
-            else if fingers = 5 then
+            else if fingers >= 4 then
                 s <- s + "* PAPER! *\n"
                 playerplay <- Morra.Paper
             pcplay <- r.Next(0, 2)
@@ -205,7 +206,8 @@ module RockPaperScissor
             (* NET for Rock Paper Scissor (this is one of the two available methods for the implementation of the net, or...) *)
 #if EXPLICIT
             let oscillations = new Parallel<_,_>(movedhandright, movedhandleft)
-            let s1 = new Sequence<_,_>(oscillations, movedhanddown)
+            let iteroscillations = new Iter<_,_>(oscillations)
+            let s1 = new Choice<_,_>(iteroscillations, movedhanddown)
             (* NET for debugging (pbs reads leap input from a file) *)
             s1.ToGestureNet(s) |> ignore
             movedhandright.Gesture.Add(movedhandright_h)
@@ -213,7 +215,7 @@ module RockPaperScissor
             movedhanddown.Gesture.Add(movedhanddown_h)
 #else
             (* ...You can implement the net in a faster way! *)
-            let expr = ((movedhandleft |-> movedhandleft_h) |=| (movedhandright |-> movedhandright_h)) |>> (movedhanddown |-> movedhanddown_h)
+            let expr = !* ((movedhandleft |-> movedhandleft_h) |=| (movedhandright |-> movedhandright_h)) |>| (movedhanddown |-> movedhanddown_h)
             expr.ToGestureNet(s) |> ignore
 #endif
 
@@ -253,18 +255,17 @@ module RockPaperScissor
 (* ** Main part ** *)
 #if RECORD
     let mutable outf = ""
-    let path = "FileRecording\\"
-    let mutable filebase = ""
-    let formatpath = "AppName HH:mm:ss"
+    let filename = "AppName "
+    let path = "FileRecording"
+    let timeformat = "HHmmss"
 
     let openFileForZip () =
         Directory.CreateDirectory(path) |> ignore
-        filebase <- System.DateTime.Now.ToString(formatpath)
-        outf <- (path + filebase + ".file")
+        outf <- (path + "\\" + filename + System.DateTime.Now.ToString(timeformat) + ".file")
         File.Open(outf, FileMode.Create, FileAccess.Write) 
 
     let zipFile () =
-        let zipdestination = filebase + ".zip"
+        let zipdestination = filename + System.DateTime.Now.ToString(timeformat) + ".zip"
         System.IO.Compression.ZipFile.CreateFromDirectory(path, zipdestination)
         Directory.Delete(path, true)
 #endif

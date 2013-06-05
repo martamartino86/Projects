@@ -22,9 +22,12 @@
     /// </summary>
     [<AllowNullLiteralAttribute>]
     type FakeId () =
-        let mutable id = System.Guid.Empty
-        do
-          id <- System.Guid.NewGuid()   // http://it.wikipedia.org/wiki/GUID
+        let mutable id = System.Guid.NewGuid()   // http://it.wikipedia.org/wiki/GUID
+//    [<AllowNullLiteralAttribute>]
+//    type FakeId () =
+//        let mutable id = System.Guid.Empty
+//        do
+//          id <- System.Guid.NewGuid()   // http://it.wikipedia.org/wiki/GUID
         /// <summary>
         /// Get the id.
         /// </summary>

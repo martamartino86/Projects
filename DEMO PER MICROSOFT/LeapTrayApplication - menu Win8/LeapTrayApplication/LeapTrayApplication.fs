@@ -279,18 +279,17 @@ module LeapTrayApplication
 (* ** Main part ** *)
 #if RECORD
     let mutable outf = ""
-    let path = "FileRecording\\"
-    let mutable filebase = ""
-    let formatpath = "AppName HH:mm:ss"
+    let filename = "[AppName] "
+    let path = "FileRecording"
+    let timeformat = "HHmmss"
 
     let openFileForZip () =
         Directory.CreateDirectory(path) |> ignore
-        filebase <- System.DateTime.Now.ToString(formatpath)
-        outf <- (path + filebase + ".file")
+        outf <- (path + "\\" + filename + System.DateTime.Now.ToString(timeformat) + ".file")
         File.Open(outf, FileMode.Create, FileAccess.Write) 
 
     let zipFile () =
-        let zipdestination = filebase + ".zip"
+        let zipdestination = "\\" + filename + System.DateTime.Now.ToString(timeformat) + ".zip"
         System.IO.Compression.ZipFile.CreateFromDirectory(path, zipdestination)
         Directory.Delete(path, true)
 #endif
